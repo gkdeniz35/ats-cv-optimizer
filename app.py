@@ -1,7 +1,6 @@
 """
-ATS CV Optimizer - Streamlit Web Application
-Tamamen ücretsiz, API gerektirmez.
-Kural bazlı keyword eşleştirme ile ATS analizi yapar.
+CV ATS ANALİZİ - Streamlit Web Application
+Tamamen ücretsiz, Kural bazlı keyword eşleştirme ile ATS analizi yapar.
 """
 
 import streamlit as st
@@ -451,3 +450,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
