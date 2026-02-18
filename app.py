@@ -149,45 +149,65 @@ def puan_hesapla(cv_text, jd_text, bolumler, eslesen, format_sorunlari):
     return min(100, puan), breakdown
 
 
-def ai_feedback_olustur(cv_text, jd_text, puan, eksik, format_sorunlari):
-    """AI ile detayli feedback olustur."""
+def ai_feedback_olustur(cv_text, jd_text, puan, eksik, format_sorunlari, tr=True):
+    """AI ile cok detayli ve CV'ye ozel feedback olustur."""
     client = get_groq_client()
     
-    prompt = f"""Sen bir kariyer kocu ve CV uzmanisın. Asagidaki CV'yi analiz et ve Turkce olarak geri bildirim ver.
+    prompt = f"""Sen Turkiye'nin en deneyimli kariyer kocu ve CV uzmanisın. 15 yildir Fortune 500 sirketlerinde ise alim yaptin ve binlerce kisinin CV'sini degerlendirdin.
 
+Asagidaki CV'yi ve is ilanini CIDDEN dikkatlice oku. Yuzeysel, genel laflar etme. CV'deki GERCEK bilgilere dayanarak, o kişiye OZEL, somut ve donusturucu geri bildirim ver.
+
+═══════════════════════════════
 CV:
 {cv_text[:3000]}
 
-Is Ilani:
+═══════════════════════════════
+IS ILANI:
 {jd_text[:2000]}
 
-ATS Puani: {puan}/100
-Eksik Kelimeler: {', '.join(eksik[:10]) if eksik else 'Yok'}
-Format Sorunlari: {', '.join(format_sorunlari[:3]) if format_sorunlari else 'Yok'}
+═══════════════════════════════
+ATS PUANI: {puan}/100
+EKSIK KELIMELER: {', '.join(eksik[:10]) if eksik else 'Hic eksik yok'}
+FORMAT SORUNLARI: {', '.join(format_sorunlari[:3]) if format_sorunlari else 'Hic sorun yok'}
 
-Lutfen su konularda Turkce detayli geri bildirim ver:
-1. CV'nin guclu yonleri
-2. Mutlaka duzeltilmesi gereken eksikler
-3. Bu is icin ozgul tavsiyeler
-4. Mulakat hazirlik ipuclari
-5. Genel kariyer tavsiyesi
+═══════════════════════════════
 
-Samimi, yardimci ve motive edici bir dille yaz. Her madde icin somut ornekler ver."""
+Asagidaki formatta TURKCE yaz. Her bolumu eksiksiz doldur. GERCEKTEN CV'yi oku ve o kisiye ozel yaz:
+
+## 👤 Sana Ozel Degerlendirme
+[CV'deki GERCEK bilgilere gore (isim, deneyim, egitim, beceriler varsa bunlara degin) kisisel bir giris yaz. "CV'nizi inceledim" gibi genel laflar ETME, direkt o kisinin bilgilerine gonder.]
+
+## ✅ Guclu Yonlerin
+[CV'de GERCEKTEN iyi olan 3-4 seyi yaz. Genel ovgu degil, spesifik: "X yillik deneyimin bu pozisyon icin cok degerli cunku..." gibi]
+
+## ⚠️ Mutlaka Duzeltmen Gerekenler
+[En az 4-5 somut, spesifik eksik veya hata. Her biri icin: Ne eksik → Neden onemli → Nasil duzelteceksin (ornek ver)]
+
+## 🎯 Bu Is Icin Sana Ozel Tavsiyeler  
+[Is ilanindaki SPESIFIK gereksinimlere gore, o kisinin CV'sindeki bilgilerle nasil one cikabilecegini anlat. Ornek: "Ilanda B ehliyeti isteniyor, bunu CV'nin en ustune ekle cunku..."]
+
+## 💬 Mulakat Hazirlik
+[Bu pozisyon icin sorulabilecek 3 spesifik soru ve nasil cevaplamasi gerektigine dair ipuclari. CV'deki bilgilere gore kisisellestir.]
+
+## 🚀 Bir Sonraki Adimin
+[Bu kisinin kariyer hedefleri acisindan 2-3 somut, uygulanabilir adim. Motivasyon ver ama gercekci ol.]
+
+ONEMLI: Turkce yaz. Samimi, direkt ve motive edici ol. Genel laflardan kac, CV'deki GERCEK bilgilere dayanarak yaz."""
 
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
-        max_tokens=1500,
+        max_tokens=2000,
     )
     return response.choices[0].message.content
 
 
-def ai_soru_cevap(soru, cv_text, jd_text, mesaj_gecmisi):
+def ai_soru_cevap(soru, cv_text, jd_text, mesaj_gecmisi, tr=True):
     """Kullanicinin sorularini AI ile cevapla."""
     client = get_groq_client()
     
-    sistem_mesaji = f"""Sen bir kariyer kocu ve CV uzmanisın. Kullanicinin CV'si ve basvurdugu is ilani hakkinda Turkce olarak yardimci oluyorsun.
+    sistem_mesaji = f"""Sen bir kariyer kocu ve CV uzmanisın. Kullanicinin CV'si ve basvurdugu is ilani hakkinda {"Turkce" if tr else "English"} olarak yardimci oluyorsun.
 
 CV Ozeti:
 {cv_text[:2000]}
@@ -235,17 +255,6 @@ def render_score_gauge(score):
 def main():
     st.set_page_config(page_title="ATS CV Optimizer", page_icon="📄", layout="wide")
 
-    st.title("📄 ATS CV Optimizer")
-    st.caption("AI destekli CV analizi ve kariyer kocu — Is ilanina gore CV'nizi optimize edin")
-    st.divider()
-
-    with st.sidebar:
-        st.header("Nasil Calisir?")
-        st.markdown("1. CV'nizi yapistirin veya yukleyin\n2. Is ilanini yapistirin\n3. **Analiz Et** butonuna basin\n4. AI feedback ve skor alin\n5. AI bota soru sorun")
-        st.markdown("---")
-        st.success("✅ Tamamen ucretsiz\n\n✅ API key gerektirmez\n\n✅ AI destekli analiz")
-
-    # Session state
     if "analiz_yapildi" not in st.session_state:
         st.session_state.analiz_yapildi = False
     if "cv_text" not in st.session_state:
@@ -256,36 +265,96 @@ def main():
         st.session_state.mesaj_gecmisi = []
     if "sohbet_mesajlari" not in st.session_state:
         st.session_state.sohbet_mesajlari = []
+    if "dil" not in st.session_state:
+        st.session_state.dil = None
+
+    # Dil secimi ekrani
+    if st.session_state.dil is None:
+        st.markdown("""
+        <div style='text-align:center; padding: 80px 20px;'>
+            <h1 style='font-size:3rem;'>📄 ATS CV Optimizer</h1>
+            <p style='font-size:1.2rem; color:#666;'>AI destekli CV analizi ve kariyer kocu</p>
+            <p style='font-size:1.2rem; color:#666;'>AI-powered CV analysis and career coach</p>
+            <br>
+        </div>
+        """, unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown("### 🌐 Dil Secin / Choose Language")
+            lang_col1, lang_col2 = st.columns(2)
+            with lang_col1:
+                if st.button("🇹🇷  Turkce", use_container_width=True, type="primary"):
+                    st.session_state.dil = "tr"
+                    st.rerun()
+            with lang_col2:
+                if st.button("🇬🇧  English", use_container_width=True, type="primary"):
+                    st.session_state.dil = "en"
+                    st.rerun()
+        return
+
+    tr = st.session_state.dil == "tr"
+
+    st.title("📄 ATS CV Optimizer")
+    st.caption("AI destekli CV analizi ve kariyer kocu" if tr else "AI-powered CV analysis and career coach")
+
+    with st.sidebar:
+        if st.button("🌐 Dil Degistir / Change Language"):
+            st.session_state.dil = None
+            st.session_state.analiz_yapildi = False
+            st.rerun()
+        st.markdown("---")
+        st.header("Nasil Calisir?" if tr else "How It Works")
+        if tr:
+            st.markdown("1. CV'nizi yapistirin\n2. Is ilanini yapistirin\n3. Analiz Et butonuna basin\n4. AI feedback alin\n5. AI bota soru sorun")
+        else:
+            st.markdown("1. Paste your CV\n2. Paste the Job Description\n3. Click Analyze\n4. Get AI feedback\n5. Chat with AI assistant")
+        st.markdown("---")
+        st.success("✅ Free / Ucretsiz\n\n✅ No API key\n\n✅ AI powered")
+
+    st.divider()
 
     col_cv, col_jd = st.columns(2)
 
     with col_cv:
-        st.subheader("📋 CV'niz")
-        input_method = st.radio("Giris yontemi", ["Metin yapistir", "Dosya yukle (PDF / DOCX)"], horizontal=True)
+        st.subheader("📋 CV'niz" if tr else "📋 Your CV")
+        input_options = ["Metin yapistir", "Dosya yukle (PDF / DOCX)"] if tr else ["Paste text", "Upload file (PDF / DOCX)"]
+        input_method = st.radio("Giris yontemi" if tr else "Input method", input_options, horizontal=True)
         cv_text = ""
-        if input_method == "Metin yapistir":
-            cv_text = st.text_area("CV'nizi buraya yapistirin", height=300, placeholder="Ad Soyad\nemail@gmail.com\n\nDENEYIM\n...")
+        if input_method in ["Metin yapistir", "Paste text"]:
+            cv_text = st.text_area(
+                "CV'nizi buraya yapistirin" if tr else "Paste your CV here",
+                height=300,
+                placeholder="Ad Soyad\nemail@gmail.com\n\nDENEYIM\n..." if tr else "John Doe\njohn@email.com\n\nEXPERIENCE\n..."
+            )
         else:
-            uploaded = st.file_uploader("CV Yukle", type=["pdf", "docx"], label_visibility="collapsed")
+            uploaded = st.file_uploader("CV Yukle" if tr else "Upload CV", type=["pdf", "docx"], label_visibility="collapsed")
             if uploaded:
-                with st.spinner("Dosya okunuyor..."):
+                with st.spinner("Dosya okunuyor..." if tr else "Reading file..."):
                     cv_text = extract_text_from_upload(uploaded)
                 if cv_text:
-                    st.success(f"{len(cv_text.split())} kelime okundu.")
+                    st.success(f"{len(cv_text.split())} {'kelime okundu' if tr else 'words extracted'}.")
 
     with col_jd:
-        st.subheader("🎯 Is Ilani")
-        jd_text = st.text_area("Is ilanini buraya yapistirin", height=300, placeholder="Aradigimiz kisi en az 2 yil deneyimli...")
+        st.subheader("🎯 Is Ilani" if tr else "🎯 Job Description")
+        jd_text = st.text_area(
+            "Is ilanini buraya yapistirin" if tr else "Paste the Job Description here",
+            height=300,
+            placeholder="Aradigimiz kisi en az 2 yil deneyimli..." if tr else "We are looking for a candidate with at least 2 years of experience..."
+        )
 
     st.divider()
-    analyze_btn = st.button("🔍 CV'yi Analiz Et", type="primary", use_container_width=True)
+    analyze_btn = st.button(
+        "🔍 CV'yi Analiz Et" if tr else "🔍 Analyze CV",
+        type="primary",
+        use_container_width=True
+    )
 
     if analyze_btn:
         if not cv_text.strip():
-            st.error("Lutfen CV'nizi girin.")
+            st.error("Lutfen CV'nizi girin." if tr else "Please provide your CV.")
             st.stop()
         if not jd_text.strip():
-            st.error("Lutfen is ilanini girin.")
+            st.error("Lutfen is ilanini girin." if tr else "Please paste the Job Description.")
             st.stop()
 
         st.session_state.cv_text = cv_text
@@ -293,17 +362,17 @@ def main():
         st.session_state.mesaj_gecmisi = []
         st.session_state.sohbet_mesajlari = []
 
-        with st.spinner("Analiz ediliyor..."):
+        with st.spinner("Analiz ediliyor..." if tr else "Analyzing..."):
             bolumler = bolum_tespit(cv_text)
             eslesen, eksik = keyword_analizi(cv_text, jd_text)
             format_sorunlari = format_sorunlari_tespit(cv_text)
             puan, breakdown = puan_hesapla(cv_text, jd_text, bolumler, eslesen, format_sorunlari)
 
-        with st.spinner("AI feedback hazirlaniyor..."):
+        with st.spinner("AI feedback hazirlaniyor..." if tr else "Preparing AI feedback..."):
             try:
-                ai_feedback = ai_feedback_olustur(cv_text, jd_text, puan, eksik, format_sorunlari)
+                ai_feedback = ai_feedback_olustur(cv_text, jd_text, puan, eksik, format_sorunlari, tr)
             except Exception as e:
-                ai_feedback = "AI feedback su an hazirlanamadi. Lutfen tekrar deneyin."
+                ai_feedback = "AI feedback su an hazirlanamadi." if tr else "AI feedback could not be generated."
 
         st.session_state.analiz_yapildi = True
         st.session_state.bolumler = bolumler
@@ -314,7 +383,6 @@ def main():
         st.session_state.breakdown = breakdown
         st.session_state.ai_feedback = ai_feedback
 
-    # Analiz sonuclari
     if st.session_state.analiz_yapildi:
         puan = st.session_state.puan
         breakdown = st.session_state.breakdown
@@ -324,24 +392,33 @@ def main():
         format_sorunlari = st.session_state.format_sorunlari
         ai_feedback = st.session_state.ai_feedback
 
-        st.success("Analiz tamamlandi!")
+        st.success("Analiz tamamlandi!" if tr else "Analysis complete!")
         st.divider()
-        st.header("📊 ATS Analiz Raporu")
+        st.header("📊 ATS Analiz Raporu" if tr else "📊 ATS Analysis Report")
 
         r1, r2 = st.columns([1, 2])
         with r1:
-            st.subheader("ATS Puani")
+            st.subheader("ATS Puani" if tr else "ATS Score")
             render_score_gauge(puan)
 
         with r2:
-            st.subheader("Puan Dagilimi")
-            labels = {
-                "keyword_match": "Keyword Eslesmesi (30)",
-                "section_structure": "Bolum Yapisi (20)",
-                "bullet_quality": "Bullet Kalitesi (20)",
-                "formatting": "Format (15)",
-                "quantified_achievements": "Sayisal Basarilar (15)"
-            }
+            st.subheader("Puan Dagilimi" if tr else "Score Breakdown")
+            if tr:
+                labels = {
+                    "keyword_match": "Keyword Eslesmesi (30)",
+                    "section_structure": "Bolum Yapisi (20)",
+                    "bullet_quality": "Bullet Kalitesi (20)",
+                    "formatting": "Format (15)",
+                    "quantified_achievements": "Sayisal Basarilar (15)"
+                }
+            else:
+                labels = {
+                    "keyword_match": "Keyword Match (30)",
+                    "section_structure": "Section Structure (20)",
+                    "bullet_quality": "Bullet Quality (20)",
+                    "formatting": "Formatting (15)",
+                    "quantified_achievements": "Quantified Achievements (15)"
+                }
             for key, label in labels.items():
                 val = breakdown.get(key, 0)
                 max_val = int(re.search(r"\((\d+)\)", label).group(1))
@@ -351,8 +428,7 @@ def main():
 
         st.divider()
 
-        # AI FEEDBACK BOLUMU
-        st.subheader("🤖 AI Kariyer Kocu Feedback")
+        st.subheader("🤖 AI Kariyer Kocu Feedback" if tr else "🤖 AI Career Coach Feedback")
         st.markdown(
             f"<div style='background:#f8f9ff; border-left:4px solid #4a90e2; padding:20px; border-radius:8px; line-height:1.8;'>{ai_feedback}</div>",
             unsafe_allow_html=True
@@ -360,10 +436,9 @@ def main():
 
         st.divider()
 
-        # Keyword analizi
         col_kw, col_fmt = st.columns(2)
         with col_kw:
-            st.subheader("🔑 Eksik Kelimeler")
+            st.subheader("🔑 Eksik Kelimeler" if tr else "🔑 Missing Keywords")
             if eksik:
                 tags_html = " ".join(
                     f"<span style='background:#fff3cd; border:1px solid #ffc107; border-radius:4px; padding:2px 8px; margin:2px; display:inline-block;'>🏷️ {kw}</span>"
@@ -371,9 +446,9 @@ def main():
                 )
                 st.markdown(tags_html, unsafe_allow_html=True)
             else:
-                st.success("Kritik eksik kelime bulunamadi.")
+                st.success("Kritik eksik kelime bulunamadi." if tr else "No critical missing keywords.")
             st.markdown("---")
-            st.subheader("✅ Eslesen Kelimeler")
+            st.subheader("✅ Eslesen Kelimeler" if tr else "✅ Matched Keywords")
             if eslesen:
                 tags_html = " ".join(
                     f"<span style='background:#d4edda; border:1px solid #28a745; border-radius:4px; padding:2px 8px; margin:2px; display:inline-block;'>✓ {kw}</span>"
@@ -382,83 +457,67 @@ def main():
                 st.markdown(tags_html, unsafe_allow_html=True)
 
         with col_fmt:
-            st.subheader("⚠️ Format Sorunlari")
+            st.subheader("⚠️ Format Sorunlari" if tr else "⚠️ Formatting Issues")
             if format_sorunlari:
                 for sorun in format_sorunlari:
                     st.warning(sorun)
             else:
-                st.success("Buyuk format sorunu bulunamadi.")
+                st.success("Buyuk format sorunu bulunamadi." if tr else "No major formatting issues.")
 
         st.divider()
 
-        # AI SOHBET BOTU
-        st.subheader("💬 AI Kariyer Asistani")
-        st.markdown("CV'niz hakkinda soru sorun! Cover letter, mulakat hazirlik, maas tavsiyesi...")
+        st.subheader("💬 AI Kariyer Asistani" if tr else "💬 AI Career Assistant")
+        st.markdown(
+            "CV'niz hakkinda soru sorun!" if tr else "Ask questions about your CV!"
+        )
 
-        # Hizli sorular
-        st.markdown("**Hizli Sorular:**")
         hizli_col1, hizli_col2, hizli_col3 = st.columns(3)
-        
         with hizli_col1:
-            if st.button("📝 Cover Letter Yaz", use_container_width=True):
-                st.session_state.hizli_soru = "Bu is icin bana Turkce bir cover letter yazar misin?"
+            btn1 = "📝 Cover Letter Yaz" if tr else "📝 Write Cover Letter"
+            if st.button(btn1, use_container_width=True):
+                st.session_state.hizli_soru = "Bu is icin Turkce cover letter yazar misin?" if tr else "Can you write a cover letter for this job in English?"
         with hizli_col2:
-            if st.button("🎯 Mulakat Sorulari", use_container_width=True):
-                st.session_state.hizli_soru = "Bu is icin hangi mulakat sorulari gelebilir ve nasil cevaplamaliyim?"
+            btn2 = "🎯 Mulakat Sorulari" if tr else "🎯 Interview Questions"
+            if st.button(btn2, use_container_width=True):
+                st.session_state.hizli_soru = "Bu is icin hangi mulakat sorulari gelebilir?" if tr else "What interview questions might come up for this job?"
         with hizli_col3:
-            if st.button("💰 Maas Tavsiyesi", use_container_width=True):
-                st.session_state.hizli_soru = "Bu pozisyon icin Turkiye'de ne kadar maas beklentisi olmali?"
+            btn3 = "💰 Maas Tavsiyesi" if tr else "💰 Salary Advice"
+            if st.button(btn3, use_container_width=True):
+                st.session_state.hizli_soru = "Bu pozisyon icin ne kadar maas beklentisi olmali?" if tr else "What salary should I expect for this position?"
 
-        # Sohbet gecmisi goster
         for mesaj in st.session_state.sohbet_mesajlari:
             with st.chat_message(mesaj["role"]):
                 st.markdown(mesaj["content"])
 
-        # Hizli soru varsa otomatik gonder
         if "hizli_soru" in st.session_state and st.session_state.hizli_soru:
             soru = st.session_state.hizli_soru
             st.session_state.hizli_soru = ""
-            
             st.session_state.sohbet_mesajlari.append({"role": "user", "content": soru})
-            
-            with st.spinner("AI cevap yaziyor..."):
+            with st.spinner("AI cevap yaziyor..." if tr else "AI is typing..."):
                 try:
-                    cevap = ai_soru_cevap(
-                        soru,
-                        st.session_state.cv_text,
-                        st.session_state.jd_text,
-                        st.session_state.mesaj_gecmisi
-                    )
+                    cevap = ai_soru_cevap(soru, st.session_state.cv_text, st.session_state.jd_text, st.session_state.mesaj_gecmisi, tr)
                     st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru})
                     st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": cevap})
                     st.session_state.sohbet_mesajlari.append({"role": "assistant", "content": cevap})
-                except Exception as e:
-                    cevap = "Bir hata olustu. Lutfen tekrar deneyin."
-                    st.session_state.sohbet_mesajlari.append({"role": "assistant", "content": cevap})
+                except:
+                    st.session_state.sohbet_mesajlari.append({"role": "assistant", "content": "Hata olustu." if tr else "An error occurred."})
             st.rerun()
 
-        # Manuel soru girisi
-        if kullanici_sorusu := st.chat_input("Bir soru sorun... (ornek: 'Bu is icin cover letter yazar misin?')"):
+        chat_placeholder = "Bir soru sorun..." if tr else "Ask a question..."
+        if kullanici_sorusu := st.chat_input(chat_placeholder):
             st.session_state.sohbet_mesajlari.append({"role": "user", "content": kullanici_sorusu})
-
-            with st.spinner("AI cevap yaziyor..."):
+            with st.spinner("AI cevap yaziyor..." if tr else "AI is typing..."):
                 try:
-                    cevap = ai_soru_cevap(
-                        kullanici_sorusu,
-                        st.session_state.cv_text,
-                        st.session_state.jd_text,
-                        st.session_state.mesaj_gecmisi
-                    )
+                    cevap = ai_soru_cevap(kullanici_sorusu, st.session_state.cv_text, st.session_state.jd_text, st.session_state.mesaj_gecmisi, tr)
                     st.session_state.mesaj_gecmisi.append({"role": "user", "content": kullanici_sorusu})
                     st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": cevap})
                     st.session_state.sohbet_mesajlari.append({"role": "assistant", "content": cevap})
-                except Exception as e:
-                    cevap = "Bir hata olustu. Lutfen tekrar deneyin."
-                    st.session_state.sohbet_mesajlari.append({"role": "assistant", "content": cevap})
+                except:
+                    st.session_state.sohbet_mesajlari.append({"role": "assistant", "content": "Hata olustu." if tr else "An error occurred."})
             st.rerun()
 
         st.divider()
-        st.caption("AI analizi tavsiye niteligindedir. Groq AI (LLaMA 3.3 70B) kullanilmaktadir.")
+        st.caption("Groq AI (LLaMA 3.3 70B) ile analiz edilmistir. Sonuclar tavsiye niteligindedir.")
 
 
 if __name__ == "__main__":
