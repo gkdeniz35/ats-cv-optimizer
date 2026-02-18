@@ -1,11 +1,11 @@
 """
 ATS CV Optimizer - Streamlit Web Application
-Uses Groq AI (free) to analyze CVs against Job Descriptions
+Uses Google Gemini AI (free) to analyze CVs against Job Descriptions
 and provide ATS compatibility scoring and improvement suggestions.
 """
 
 import streamlit as st
-from groq import Groq
+import google.generativeai as genai
 import json
 import re
 import io
@@ -61,7 +61,7 @@ def build_analysis_prompt(cv_text: str, jd_text: str) -> str:
     return f"""You are an expert ATS (Applicant Tracking System) analyst and career coach.
 
 Analyze the CV below against the provided Job Description and return ONLY a valid JSON object
-(no markdown fences, no extra text) with exactly this structure:
+(no markdown fences, no extra text) with the following structure:
 
 {{
   "sections_found": {{
@@ -106,18 +106,12 @@ Analyze the CV below against the provided Job Description and return ONLY a vali
 """
 
 
-def analyze_cv_with_groq(cv_text: str, jd_text: str, api_key: str) -> dict:
-    client = Groq(api_key=api_key)
+def analyze_cv_with_gemini(cv_text: str, jd_text: str, api_key: str) -> dict:
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-2.0-flash")
     prompt = build_analysis_prompt(cv_text, jd_text)
-
-    response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.3,
-        max_tokens=2048,
-    )
-
-    raw = response.choices[0].message.content.strip()
+    response = model.generate_content(prompt)
+    raw = response.text.strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     result = json.loads(raw)
@@ -157,18 +151,18 @@ def render_score_gauge(score: int):
 
 
 def main():
-    st.set_page_config(page_title="ATS CV Optimizer", page_icon="📄", layout="wide")
+    st.set_page_config(page_title="CV Analiz Aracı", page_icon="📄", layout="wide")
 
     st.title("📄 ATS CV Optimizer")
-    st.caption("Powered by Groq AI (Free) — optimize your CV to pass Applicant Tracking Systems")
+    st.caption("Powered by Google Gemini AI — optimize your CV to pass Applicant Tracking Systems")
     st.divider()
 
     with st.sidebar:
         st.header("⚙️ Settings")
         api_key = st.text_input(
-            "Groq API Key",
+            "Google Gemini API Key",
             type="password",
-            help="Get yours at https://console.groq.com"
+            help="Get yours at https://aistudio.google.com/apikey"
         )
         st.markdown("---")
         st.markdown("**How it works:**\n1. Paste or upload your CV\n2. Paste the Job Description\n3. Click Analyze\n4. Review your ATS score & suggestions")
@@ -184,23 +178,23 @@ def main():
         else:
             uploaded = st.file_uploader("Upload CV", type=["pdf", "docx"], label_visibility="collapsed")
             if uploaded:
-                with st.spinner("Parsing file..."):
+                with st.spinner("Parsing file…"):
                     cv_text = extract_text_from_upload(uploaded)
                 if cv_text:
                     st.success(f"Extracted {len(cv_text.split())} words from file.")
                     with st.expander("Preview extracted text"):
-                        st.text(cv_text[:2000] + ("..." if len(cv_text) > 2000 else ""))
+                        st.text(cv_text[:2000] + ("…" if len(cv_text) > 2000 else ""))
 
     with col_jd:
         st.subheader("🎯 Job Description")
-        jd_text = st.text_area("Paste the Job Description here", height=350, placeholder="We are looking for a Senior Python Engineer with experience in...")
+        jd_text = st.text_area("Paste the Job Description here", height=350, placeholder="We are looking for a Senior Python Engineer with experience in…")
 
     st.divider()
     analyze_btn = st.button("🔍 Analyze CV", type="primary", use_container_width=True)
 
     if analyze_btn:
         if not api_key:
-            st.error("Please enter your Groq API key in the sidebar.")
+            st.error("Please enter your Google Gemini API key in the sidebar.")
             st.stop()
         if not cv_text.strip():
             st.error("Please provide your CV text or upload a file.")
@@ -209,9 +203,9 @@ def main():
             st.error("Please paste the Job Description.")
             st.stop()
 
-        with st.spinner("Analyzing your CV with Groq AI... this may take 10-20 seconds."):
+        with st.spinner("Analyzing your CV with Gemini AI… this may take 15–30 seconds."):
             try:
-                result = analyze_cv_with_groq(cv_text, jd_text, api_key)
+                result = analyze_cv_with_gemini(cv_text, jd_text, api_key)
             except json.JSONDecodeError as e:
                 st.error(f"Failed to parse AI response: {e}")
                 st.stop()
@@ -241,7 +235,7 @@ def main():
             for key, label in breakdown_labels.items():
                 val = breakdown.get(key, 0)
                 max_val = int(re.search(r"\((\d+)\)", label).group(1))
-                pct = min(100, int((val / max_val) * 100)) if max_val else 0
+                pct = int((val / max_val) * 100) if max_val else 0
                 st.write(f"**{label}**: {val}/{max_val}")
                 st.progress(pct)
 
@@ -293,7 +287,7 @@ def main():
         weak_bullets = result.get("weak_bullets", [])
         if weak_bullets:
             for idx, item in enumerate(weak_bullets, 1):
-                with st.expander(f"Bullet {idx}: {item.get('original', '')[:60]}..."):
+                with st.expander(f"Bullet {idx}: {item.get('original', '')[:60]}…"):
                     st.markdown(f"**Original:**  \n_{item.get('original', '')}_")
                     st.markdown(f"**Issue:** {item.get('issue', '')}")
                     st.markdown(
@@ -305,8 +299,10 @@ def main():
             st.success("No critically weak bullets detected.")
 
         st.divider()
-        st.caption("Analysis generated by Groq AI (LLaMA 3.3 70B). Results are advisory.")
+        st.caption("💬 Analysis generated by Google Gemini AI. Results are advisory.")
 
 
 if __name__ == "__main__":
     main()
+
+
