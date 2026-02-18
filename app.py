@@ -1,12 +1,14 @@
 """
-CV ATS ANALİZİ - Streamlit Web Application
-Tamamen ücretsiz, Kural bazlı keyword eşleştirme ile ATS analizi yapar.
+ATS CV Optimizer - Streamlit Web Application
+Groq AI destekli, kullanici API key girmez.
+CV analizi + AI feedback botu.
 """
 
 import streamlit as st
 import re
 import io
 from collections import Counter
+from groq import Groq
 
 try:
     import pdfplumber
@@ -21,13 +23,15 @@ except ImportError:
     DOCX_SUPPORT = False
 
 
-# ──────────────────────────────────────────────
-# DOSYA OKUMA
-# ──────────────────────────────────────────────
+def get_groq_client():
+    """Groq client'i Streamlit secrets'tan al."""
+    api_key = st.secrets["GROQ_API_KEY"]
+    return Groq(api_key=api_key)
+
 
 def parse_pdf(file_bytes):
     if not PDF_SUPPORT:
-        st.error("pdfplumber yüklü değil.")
+        st.error("pdfplumber yuklu degil.")
         return ""
     text_parts = []
     with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
@@ -40,7 +44,7 @@ def parse_pdf(file_bytes):
 
 def parse_docx(file_bytes):
     if not DOCX_SUPPORT:
-        st.error("python-docx yüklü değil.")
+        st.error("python-docx yuklu degil.")
         return ""
     doc = Document(io.BytesIO(file_bytes))
     return "\n".join([p.text for p in doc.paragraphs if p.text.strip()])
@@ -54,221 +58,157 @@ def extract_text_from_upload(uploaded_file):
     elif name.endswith(".docx"):
         return parse_docx(file_bytes)
     else:
-        st.error("Desteklenmeyen dosya türü.")
+        st.error("Desteklenmeyen dosya turu.")
         return ""
 
 
-# ──────────────────────────────────────────────
-# ANALİZ FONKSİYONLARI
-# ──────────────────────────────────────────────
-
 def temizle(text):
-    """Metni küçük harfe çevir ve noktalama işaretlerini kaldır."""
     text = text.lower()
     text = re.sub(r'[^\w\s]', ' ', text)
     return text
 
 
-def kelimeleri_cıkar(text):
-    """Metindeki anlamlı kelimeleri çıkar."""
+def kelimeleri_cikar(text):
     stopwords = {
-        've', 'veya', 'ile', 'bir', 'bu', 'da', 'de', 'için', 'olan',
+        've', 'veya', 'ile', 'bir', 'bu', 'da', 'de', 'icin', 'olan',
         'the', 'and', 'or', 'is', 'in', 'at', 'of', 'to', 'a', 'an',
         'for', 'on', 'with', 'as', 'by', 'be', 'are', 'was', 'were',
         'that', 'this', 'it', 'we', 'you', 'he', 'she', 'they', 'have',
         'has', 'had', 'will', 'would', 'can', 'could', 'should', 'may',
         'might', 'must', 'shall', 'do', 'does', 'did', 'not', 'but',
-        'if', 'then', 'than', 'so', 'from', 'up', 'about', 'into',
-        'through', 'during', 'including', 'until', 'against', 'among',
-        'throughout', 'despite', 'towards', 'upon', 'concerning'
+        'if', 'then', 'than', 'so', 'from', 'up', 'about', 'into'
     }
     kelimeler = temizle(text).split()
     return [k for k in kelimeler if len(k) > 2 and k not in stopwords]
 
 
 def bolum_tespit(cv_text):
-    """CV'deki bölümleri tespit et."""
     text_lower = cv_text.lower()
-    bolumler = {
-        "experience": any(k in text_lower for k in ["experience", "deneyim", "iş deneyimi", "work", "employment", "çalıştım"]),
-        "education": any(k in text_lower for k in ["education", "eğitim", "okul", "university", "üniversite", "mezun", "degree", "lisans"]),
-        "skills": any(k in text_lower for k in ["skills", "yetenekler", "beceriler", "yetkinlikler", "competencies", "technical"]),
-        "certifications": any(k in text_lower for k in ["certification", "sertifika", "certificate", "lisans", "license"])
+    return {
+        "experience": any(k in text_lower for k in ["experience", "deneyim", "work", "employment", "calistim"]),
+        "education": any(k in text_lower for k in ["education", "egitim", "university", "universite", "mezun", "degree", "lisans"]),
+        "skills": any(k in text_lower for k in ["skills", "yetenekler", "beceriler", "competencies", "technical"]),
+        "certifications": any(k in text_lower for k in ["certification", "sertifika", "certificate", "license"])
     }
-    return bolumler
 
 
 def format_sorunlari_tespit(cv_text):
-    """ATS'yi bozabilecek format sorunlarını tespit et."""
     sorunlar = []
     satirlar = cv_text.split('\n')
-
-    # Çok kısa satırlar (tablo formatı)
     kisa_satirlar = [s for s in satirlar if 0 < len(s.strip()) < 15]
     if len(kisa_satirlar) > 10:
-        sorunlar.append("CV'niz tablo veya sütun formatı içeriyor olabilir. ATS sistemleri tabloları okuyamaz.")
-
-    # Çok uzun paragraflar
-    uzun_satirlar = [s for s in satirlar if len(s.strip()) > 300]
-    if uzun_satirlar:
-        sorunlar.append("Çok uzun paragraflar var. Bullet point kullanmanız önerilir.")
-
-    # Bölüm başlıklarının olmaması
+        sorunlar.append("CV'niz tablo veya sutun formati iceriyor. ATS sistemleri tablolari okuyamaz.")
     bolumler = bolum_tespit(cv_text)
     if not bolumler["skills"]:
-        sorunlar.append("'Skills' veya 'Yetenekler' bölümü bulunamadı. ATS sistemleri bu bölümü arar.")
+        sorunlar.append("'Skills' veya 'Yetenekler' bolumu bulunamadi.")
     if not bolumler["experience"]:
-        sorunlar.append("'Experience' veya 'Deneyim' bölümü bulunamadı.")
-
-    # Özel karakterler
-    if any(c in cv_text for c in ['★', '●', '◆', '▸', '✦']):
-        sorunlar.append("Özel karakterler (★, ●, ◆ vb.) ATS sistemlerinde hatalı okunabilir.")
-
-    # Email kontrolü
+        sorunlar.append("'Experience' veya 'Deneyim' bolumu bulunamadi.")
     if not re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', cv_text):
-        sorunlar.append("CV'de email adresi bulunamadı.")
-
-    # Telefon kontrolü
+        sorunlar.append("CV'de email adresi bulunamadi.")
     if not re.search(r'[\+]?[\d\s\-\(\)]{10,}', cv_text):
-        sorunlar.append("CV'de telefon numarası bulunamadı.")
-
+        sorunlar.append("CV'de telefon numarasi bulunamadi.")
     return sorunlar
 
 
 def keyword_analizi(cv_text, jd_text):
-    """JD ile CV arasındaki keyword eşleşmesini analiz et."""
-    cv_kelimeler = set(kelimeleri_cıkar(cv_text))
-    jd_kelimeler = kelimeleri_cıkar(jd_text)
-
-    # JD'deki en sık geçen kelimeleri bul
+    cv_kelimeler = set(kelimeleri_cikar(cv_text))
+    jd_kelimeler = kelimeleri_cikar(jd_text)
     jd_sayac = Counter(jd_kelimeler)
-    onemli_jd_kelimeleri = {k for k, v in jd_sayac.items() if v >= 1 and len(k) > 3}
-
-    # Eşleşenler ve eşleşmeyenler
-    eslesen = onemli_jd_kelimeleri & cv_kelimeler
-    eksik = onemli_jd_kelimeleri - cv_kelimeler
-
-    # En önemli eksik kelimeleri filtrele (çok genel olanları çıkar)
-    genel_kelimeler = {
-        'olarak', 'olan', 'veya', 'ile', 'için', 'olan', 'must', 'will',
-        'work', 'good', 'well', 'able', 'also', 'more', 'than', 'our',
-        'your', 'their', 'have', 'been', 'they', 'from', 'such', 'both',
-        'each', 'need', 'new', 'high', 'other', 'some', 'what', 'when',
-        'where', 'which', 'while', 'how', 'all', 'any', 'use', 'used'
-    }
-    eksik = {k for k in eksik if k not in genel_kelimeler and len(k) > 3}
-
+    onemli_jd = {k for k, v in jd_sayac.items() if len(k) > 3}
+    eslesen = onemli_jd & cv_kelimeler
+    eksik = onemli_jd - cv_kelimeler
+    genel = {'must', 'will', 'work', 'good', 'well', 'able', 'also', 'more',
+             'than', 'our', 'your', 'their', 'have', 'been', 'they', 'from',
+             'such', 'both', 'each', 'need', 'new', 'high', 'other', 'some',
+             'what', 'when', 'where', 'which', 'while', 'how', 'all', 'any'}
+    eksik = {k for k in eksik if k not in genel and len(k) > 3}
     return list(eslesen), list(eksik)[:15]
 
 
-def zayif_bullet_tespit(cv_text):
-    """Zayıf bullet point'leri tespit et."""
-    zayif_ifadeler = [
-        ("responsible for", "Led, managed veya delivered ile başlayın"),
-        ("helped with", "Direkt katkınızı belirtin (örn: 'Developed', 'Built')"),
-        ("worked on", "Somut eylemleri kullanın (örn: 'Implemented', 'Designed')"),
-        ("assisted in", "Kendi başarılarınızı ön plana çıkarın"),
-        ("sorumlu oldum", "Yönetme veya geliştirme gibi güçlü fiiller kullanın"),
-        ("yardım ettim", "Direkt katkınızı belirtin"),
-        ("çalıştım", "Başardığınız sonuçları yazın"),
-        ("görev yaptım", "Somut başarılar ekleyin"),
-    ]
-
-    bulunan = []
-    satirlar = cv_text.split('\n')
-    for satir in satirlar:
-        satir_lower = satir.lower().strip()
-        for ifade, oneri in zayif_ifadeler:
-            if ifade in satir_lower and len(satir.strip()) > 10:
-                bulunan.append({
-                    "original": satir.strip()[:100],
-                    "issue": f"'{ifade}' ifadesi zayıf bir anlatım",
-                    "suggestion": f"{oneri}. Sayısal sonuçlar ekleyin (örn: %20 artış sağladım)"
-                })
-                break
-    return bulunan[:5]
-
-
-def puan_hesapla(cv_text, jd_text, bolumler, eslesen_keywords, format_sorunlari):
-    """ATS uyumluluk puanını hesapla."""
+def puan_hesapla(cv_text, jd_text, bolumler, eslesen, format_sorunlari):
     puan = 0
     breakdown = {}
-
-    # 1. Keyword eşleşmesi (30 puan)
-    cv_kelimeler = set(kelimeleri_cıkar(cv_text))
-    jd_kelimeler = set(kelimeleri_cıkar(jd_text))
-    if jd_kelimeler:
-        oran = len(set(eslesen_keywords)) / max(len(jd_kelimeler), 1)
-        kw_puan = min(30, int(oran * 120))
-    else:
-        kw_puan = 15
+    jd_kelimeler = set(kelimeleri_cikar(jd_text))
+    kw_puan = min(30, int(len(set(eslesen)) / max(len(jd_kelimeler), 1) * 120)) if jd_kelimeler else 15
     breakdown["keyword_match"] = kw_puan
     puan += kw_puan
-
-    # 2. Bölüm yapısı (20 puan)
     bolum_puan = sum(5 for v in bolumler.values() if v)
     breakdown["section_structure"] = bolum_puan
     puan += bolum_puan
-
-    # 3. Bullet kalitesi (20 puan)
-    bullet_sayisi = len(re.findall(r'[\•\-\*]|\n\s*[-•]', cv_text))
+    bullet_sayisi = len(re.findall(r'[\*\-]|\n\s*[-*]', cv_text))
     bullet_puan = min(20, bullet_sayisi * 2)
     breakdown["bullet_quality"] = bullet_puan
     puan += bullet_puan
-
-    # 4. Format (15 puan)
     format_puan = max(0, 15 - len(format_sorunlari) * 3)
     breakdown["formatting"] = format_puan
     puan += format_puan
-
-    # 5. Sayısal başarılar (15 puan)
-    sayisal = re.findall(r'\d+\s*(%|yıl|ay|kişi|milyon|bin|proje|müşteri|year|month|people|million|k\b)', cv_text.lower())
+    sayisal = re.findall(r'\d+\s*(%|yil|ay|kisi|milyon|bin|proje|year|month|people|million)', cv_text.lower())
     sayisal_puan = min(15, len(sayisal) * 3)
     breakdown["quantified_achievements"] = sayisal_puan
     puan += sayisal_puan
-
     return min(100, puan), breakdown
 
 
-def ozet_olustur(puan, bolumler, eslesen, eksik, format_sorunlari):
-    """Genel özet oluştur."""
-    guclu = sum(1 for v in bolumler.values() if v)
-    if puan >= 75:
-        return f"CV'niz bu pozisyon için güçlü bir uyum gösteriyor ({puan}/100). {len(eslesen)} anahtar kelime eşleşti. Küçük iyileştirmelerle daha da güçlendirebilirsiniz."
-    elif puan >= 50:
-        return f"CV'niz orta düzeyde uyumlu ({puan}/100). {len(eksik)} önemli kelime eksik. Bu kelimeleri ekleyerek puanınızı artırabilirsiniz."
-    else:
-        return f"CV'niz bu pozisyon için düşük uyum gösteriyor ({puan}/100). İş ilanındaki anahtar kelimeleri CV'nize eklemeniz ve format sorunlarını gidermeniz önerilir."
+def ai_feedback_olustur(cv_text, jd_text, puan, eksik, format_sorunlari):
+    """AI ile detayli feedback olustur."""
+    client = get_groq_client()
+    
+    prompt = f"""Sen bir kariyer kocu ve CV uzmanisın. Asagidaki CV'yi analiz et ve Turkce olarak geri bildirim ver.
+
+CV:
+{cv_text[:3000]}
+
+Is Ilani:
+{jd_text[:2000]}
+
+ATS Puani: {puan}/100
+Eksik Kelimeler: {', '.join(eksik[:10]) if eksik else 'Yok'}
+Format Sorunlari: {', '.join(format_sorunlari[:3]) if format_sorunlari else 'Yok'}
+
+Lutfen su konularda Turkce detayli geri bildirim ver:
+1. CV'nin guclu yonleri
+2. Mutlaka duzeltilmesi gereken eksikler
+3. Bu is icin ozgul tavsiyeler
+4. Mulakat hazirlik ipuclari
+5. Genel kariyer tavsiyesi
+
+Samimi, yardimci ve motive edici bir dille yaz. Her madde icin somut ornekler ver."""
+
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.7,
+        max_tokens=1500,
+    )
+    return response.choices[0].message.content
 
 
-def iyilestirme_onerileri(bolumler, eksik, format_sorunlari, cv_text):
-    """Somut iyileştirme önerileri oluştur."""
-    oneriler = []
+def ai_soru_cevap(soru, cv_text, jd_text, mesaj_gecmisi):
+    """Kullanicinin sorularini AI ile cevapla."""
+    client = get_groq_client()
+    
+    sistem_mesaji = f"""Sen bir kariyer kocu ve CV uzmanisın. Kullanicinin CV'si ve basvurdugu is ilani hakkinda Turkce olarak yardimci oluyorsun.
 
-    if eksik:
-        oneriler.append(f"Şu eksik anahtar kelimeleri CV'nize ekleyin: {', '.join(eksik[:5])}")
+CV Ozeti:
+{cv_text[:2000]}
 
-    if not bolumler["skills"]:
-        oneriler.append("'Beceriler' veya 'Skills' başlıklı bir bölüm ekleyin ve teknik yeteneklerinizi listeleyin.")
+Is Ilani Ozeti:
+{jd_text[:1000]}
 
-    if not bolumler["certifications"]:
-        oneriler.append("Varsa sertifikalarınızı ve eğitimlerinizi ayrı bir bölümde belirtin.")
+Her zaman Turkce cevap ver. Samimi, yardimci ve pratik tavsiyeler ver. Cover letter, mulakat hazirlik, maas musaveresi gibi konularda yardimci ol."""
 
-    sayisal = re.findall(r'\d+', cv_text)
-    if len(sayisal) < 3:
-        oneriler.append("Başarılarınızı sayısal verilerle destekleyin (örn: '%20 satış artışı', '50 kişilik ekip yönettim').")
+    mesajlar = [{"role": "system", "content": sistem_mesaji}]
+    mesajlar.extend(mesaj_gecmisi)
+    mesajlar.append({"role": "user", "content": soru})
 
-    if format_sorunlari:
-        oneriler.append("Format sorunlarını giderin: " + format_sorunlari[0])
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=mesajlar,
+        temperature=0.7,
+        max_tokens=1000,
+    )
+    return response.choices[0].message.content
 
-    oneriler.append("Her iş ilanı için CV'nizi özelleştirin ve ilandaki kelimeleri birebir kullanın.")
-
-    return oneriler[:5]
-
-
-# ──────────────────────────────────────────────
-# GÖRSEL YARDIMCILAR
-# ──────────────────────────────────────────────
 
 def score_color(score):
     if score >= 75:
@@ -281,15 +221,9 @@ def score_color(score):
 
 def render_score_gauge(score):
     color = score_color(score)
-    if score >= 75:
-        label = "Güçlü Eşleşme ✅"
-    elif score >= 50:
-        label = "Orta Eşleşme ⚠️"
-    else:
-        label = "Zayıf Eşleşme ❌"
+    label = "Guclu Esleme ✅" if score >= 75 else ("Orta Esleme ⚠️" if score >= 50 else "Zayif Esleme ❌")
     filled = int(score / 5)
-    empty = 20 - filled
-    bar = "█" * filled + "░" * empty
+    bar = "█" * filled + "░" * (20 - filled)
     st.markdown(
         f"<h1 style='color:{color}; font-size:3rem;'>{score}/100</h1>"
         f"<p style='font-family:monospace; letter-spacing:2px; color:{color};'>{bar}</p>"
@@ -298,111 +232,138 @@ def render_score_gauge(score):
     )
 
 
-# ──────────────────────────────────────────────
-# ANA UYGULAMA
-# ──────────────────────────────────────────────
-
 def main():
     st.set_page_config(page_title="ATS CV Optimizer", page_icon="📄", layout="wide")
 
     st.title("📄 ATS CV Optimizer")
-    st.caption("Ücretsiz ATS uyumluluk analizi — CV'nizi iş ilanına göre optimize edin")
+    st.caption("AI destekli CV analizi ve kariyer kocu — Is ilanina gore CV'nizi optimize edin")
     st.divider()
 
     with st.sidebar:
-        st.header("ℹ️ Nasıl Çalışır?")
-        st.markdown("1. CV'nizi yapıştırın veya yükleyin\n2. İş ilanını yapıştırın\n3. **Analiz Et** butonuna basın\n4. Sonuçları inceleyin")
+        st.header("Nasil Calisir?")
+        st.markdown("1. CV'nizi yapistirin veya yukleyin\n2. Is ilanini yapistirin\n3. **Analiz Et** butonuna basin\n4. AI feedback ve skor alin\n5. AI bota soru sorun")
         st.markdown("---")
-        st.success("✅ Tamamen ücretsiz\n\n✅ API key gerektirmez\n\n✅ Verileriniz kayıt edilmez")
+        st.success("✅ Tamamen ucretsiz\n\n✅ API key gerektirmez\n\n✅ AI destekli analiz")
+
+    # Session state
+    if "analiz_yapildi" not in st.session_state:
+        st.session_state.analiz_yapildi = False
+    if "cv_text" not in st.session_state:
+        st.session_state.cv_text = ""
+    if "jd_text" not in st.session_state:
+        st.session_state.jd_text = ""
+    if "mesaj_gecmisi" not in st.session_state:
+        st.session_state.mesaj_gecmisi = []
+    if "sohbet_mesajlari" not in st.session_state:
+        st.session_state.sohbet_mesajlari = []
 
     col_cv, col_jd = st.columns(2)
 
     with col_cv:
         st.subheader("📋 CV'niz")
-        input_method = st.radio("Giriş yöntemi", ["Metin yapıştır", "Dosya yükle (PDF / DOCX)"], horizontal=True)
+        input_method = st.radio("Giris yontemi", ["Metin yapistir", "Dosya yukle (PDF / DOCX)"], horizontal=True)
         cv_text = ""
-        if input_method == "Metin yapıştır":
-            cv_text = st.text_area("CV'nizi buraya yapıştırın", height=350, placeholder="Ad Soyad\nemail@gmail.com\n\nDENEYİM\n...")
+        if input_method == "Metin yapistir":
+            cv_text = st.text_area("CV'nizi buraya yapistirin", height=300, placeholder="Ad Soyad\nemail@gmail.com\n\nDENEYIM\n...")
         else:
-            uploaded = st.file_uploader("CV Yükle", type=["pdf", "docx"], label_visibility="collapsed")
+            uploaded = st.file_uploader("CV Yukle", type=["pdf", "docx"], label_visibility="collapsed")
             if uploaded:
                 with st.spinner("Dosya okunuyor..."):
                     cv_text = extract_text_from_upload(uploaded)
                 if cv_text:
                     st.success(f"{len(cv_text.split())} kelime okundu.")
-                    with st.expander("Önizleme"):
-                        st.text(cv_text[:2000])
 
     with col_jd:
-        st.subheader("🎯 İş İlanı")
-        jd_text = st.text_area("İş ilanını buraya yapıştırın", height=350, placeholder="Aradığımız kişi en az 2 yıl deneyimli...")
+        st.subheader("🎯 Is Ilani")
+        jd_text = st.text_area("Is ilanini buraya yapistirin", height=300, placeholder="Aradigimiz kisi en az 2 yil deneyimli...")
 
     st.divider()
     analyze_btn = st.button("🔍 CV'yi Analiz Et", type="primary", use_container_width=True)
 
     if analyze_btn:
         if not cv_text.strip():
-            st.error("Lütfen CV'nizi girin.")
+            st.error("Lutfen CV'nizi girin.")
             st.stop()
         if not jd_text.strip():
-            st.error("Lütfen iş ilanını girin.")
+            st.error("Lutfen is ilanini girin.")
             st.stop()
+
+        st.session_state.cv_text = cv_text
+        st.session_state.jd_text = jd_text
+        st.session_state.mesaj_gecmisi = []
+        st.session_state.sohbet_mesajlari = []
 
         with st.spinner("Analiz ediliyor..."):
             bolumler = bolum_tespit(cv_text)
             eslesen, eksik = keyword_analizi(cv_text, jd_text)
             format_sorunlari = format_sorunlari_tespit(cv_text)
-            zayif_bulletlar = zayif_bullet_tespit(cv_text)
             puan, breakdown = puan_hesapla(cv_text, jd_text, bolumler, eslesen, format_sorunlari)
-            ozet = ozet_olustur(puan, bolumler, eslesen, eksik, format_sorunlari)
-            oneriler = iyilestirme_onerileri(bolumler, eksik, format_sorunlari, cv_text)
 
-        st.success("Analiz tamamlandı!")
+        with st.spinner("AI feedback hazirlaniyor..."):
+            try:
+                ai_feedback = ai_feedback_olustur(cv_text, jd_text, puan, eksik, format_sorunlari)
+            except Exception as e:
+                ai_feedback = "AI feedback su an hazirlanamadi. Lutfen tekrar deneyin."
+
+        st.session_state.analiz_yapildi = True
+        st.session_state.bolumler = bolumler
+        st.session_state.eslesen = eslesen
+        st.session_state.eksik = eksik
+        st.session_state.format_sorunlari = format_sorunlari
+        st.session_state.puan = puan
+        st.session_state.breakdown = breakdown
+        st.session_state.ai_feedback = ai_feedback
+
+    # Analiz sonuclari
+    if st.session_state.analiz_yapildi:
+        puan = st.session_state.puan
+        breakdown = st.session_state.breakdown
+        bolumler = st.session_state.bolumler
+        eslesen = st.session_state.eslesen
+        eksik = st.session_state.eksik
+        format_sorunlari = st.session_state.format_sorunlari
+        ai_feedback = st.session_state.ai_feedback
+
+        st.success("Analiz tamamlandi!")
         st.divider()
         st.header("📊 ATS Analiz Raporu")
 
         r1, r2 = st.columns([1, 2])
         with r1:
-            st.subheader("ATS Uyumluluk Puanı")
+            st.subheader("ATS Puani")
             render_score_gauge(puan)
 
         with r2:
-            st.subheader("Puan Dağılımı")
+            st.subheader("Puan Dagilimi")
             labels = {
-                "keyword_match": "Keyword Eşleşmesi (30)",
-                "section_structure": "Bölüm Yapısı (20)",
+                "keyword_match": "Keyword Eslesmesi (30)",
+                "section_structure": "Bolum Yapisi (20)",
                 "bullet_quality": "Bullet Kalitesi (20)",
                 "formatting": "Format (15)",
-                "quantified_achievements": "Sayısal Başarılar (15)"
+                "quantified_achievements": "Sayisal Basarilar (15)"
             }
-            import re as re2
             for key, label in labels.items():
                 val = breakdown.get(key, 0)
-                max_val = int(re2.search(r"\((\d+)\)", label).group(1))
+                max_val = int(re.search(r"\((\d+)\)", label).group(1))
                 pct = min(100, int((val / max_val) * 100)) if max_val else 0
                 st.write(f"**{label}**: {val}/{max_val}")
                 st.progress(pct)
 
         st.divider()
-        st.subheader("📁 CV Bölümleri")
-        s_cols = st.columns(4)
-        bolum_isimleri = {"experience": "Deneyim", "education": "Eğitim", "skills": "Beceriler", "certifications": "Sertifikalar"}
-        for i, (key, isim) in enumerate(bolum_isimleri.items()):
-            s_cols[i].metric(label=isim, value="✅" if bolumler.get(key) else "❌")
+
+        # AI FEEDBACK BOLUMU
+        st.subheader("🤖 AI Kariyer Kocu Feedback")
+        st.markdown(
+            f"<div style='background:#f8f9ff; border-left:4px solid #4a90e2; padding:20px; border-radius:8px; line-height:1.8;'>{ai_feedback}</div>",
+            unsafe_allow_html=True
+        )
 
         st.divider()
-        st.subheader("🗒️ Genel Değerlendirme")
-        st.info(ozet)
 
-        st.subheader("🚀 Top 5 İyileştirme Önerisi")
-        for i, tip in enumerate(oneriler, 1):
-            st.markdown(f"**{i}.** {tip}")
-
-        st.divider()
+        # Keyword analizi
         col_kw, col_fmt = st.columns(2)
-
         with col_kw:
-            st.subheader("🔑 Eksik Anahtar Kelimeler")
+            st.subheader("🔑 Eksik Kelimeler")
             if eksik:
                 tags_html = " ".join(
                     f"<span style='background:#fff3cd; border:1px solid #ffc107; border-radius:4px; padding:2px 8px; margin:2px; display:inline-block;'>🏷️ {kw}</span>"
@@ -410,10 +371,9 @@ def main():
                 )
                 st.markdown(tags_html, unsafe_allow_html=True)
             else:
-                st.success("Kritik eksik kelime bulunamadı.")
-
+                st.success("Kritik eksik kelime bulunamadi.")
             st.markdown("---")
-            st.subheader("✅ Eşleşen Kelimeler")
+            st.subheader("✅ Eslesen Kelimeler")
             if eslesen:
                 tags_html = " ".join(
                     f"<span style='background:#d4edda; border:1px solid #28a745; border-radius:4px; padding:2px 8px; margin:2px; display:inline-block;'>✓ {kw}</span>"
@@ -422,32 +382,84 @@ def main():
                 st.markdown(tags_html, unsafe_allow_html=True)
 
         with col_fmt:
-            st.subheader("⚠️ Format Sorunları")
+            st.subheader("⚠️ Format Sorunlari")
             if format_sorunlari:
                 for sorun in format_sorunlari:
                     st.warning(sorun)
             else:
-                st.success("Büyük format sorunu bulunamadı.")
+                st.success("Buyuk format sorunu bulunamadi.")
 
         st.divider()
-        st.subheader("✍️ Zayıf İfadeler ve Öneriler")
-        if zayif_bulletlar:
-            for idx, item in enumerate(zayif_bulletlar, 1):
-                with st.expander(f"İfade {idx}: {item['original'][:60]}..."):
-                    st.markdown(f"**Orijinal:** _{item['original']}_")
-                    st.markdown(f"**Sorun:** {item['issue']}")
-                    st.markdown(
-                        f"<div style='background:#d4edda; padding:10px; border-radius:6px;'>"
-                        f"✅ <strong>Öneri:</strong> {item['suggestion']}</div>",
-                        unsafe_allow_html=True
+
+        # AI SOHBET BOTU
+        st.subheader("💬 AI Kariyer Asistani")
+        st.markdown("CV'niz hakkinda soru sorun! Cover letter, mulakat hazirlik, maas tavsiyesi...")
+
+        # Hizli sorular
+        st.markdown("**Hizli Sorular:**")
+        hizli_col1, hizli_col2, hizli_col3 = st.columns(3)
+        
+        with hizli_col1:
+            if st.button("📝 Cover Letter Yaz", use_container_width=True):
+                st.session_state.hizli_soru = "Bu is icin bana Turkce bir cover letter yazar misin?"
+        with hizli_col2:
+            if st.button("🎯 Mulakat Sorulari", use_container_width=True):
+                st.session_state.hizli_soru = "Bu is icin hangi mulakat sorulari gelebilir ve nasil cevaplamaliyim?"
+        with hizli_col3:
+            if st.button("💰 Maas Tavsiyesi", use_container_width=True):
+                st.session_state.hizli_soru = "Bu pozisyon icin Turkiye'de ne kadar maas beklentisi olmali?"
+
+        # Sohbet gecmisi goster
+        for mesaj in st.session_state.sohbet_mesajlari:
+            with st.chat_message(mesaj["role"]):
+                st.markdown(mesaj["content"])
+
+        # Hizli soru varsa otomatik gonder
+        if "hizli_soru" in st.session_state and st.session_state.hizli_soru:
+            soru = st.session_state.hizli_soru
+            st.session_state.hizli_soru = ""
+            
+            st.session_state.sohbet_mesajlari.append({"role": "user", "content": soru})
+            
+            with st.spinner("AI cevap yaziyor..."):
+                try:
+                    cevap = ai_soru_cevap(
+                        soru,
+                        st.session_state.cv_text,
+                        st.session_state.jd_text,
+                        st.session_state.mesaj_gecmisi
                     )
-        else:
-            st.success("Zayıf ifade bulunamadı.")
+                    st.session_state.mesaj_gecmisi.append({"role": "user", "content": soru})
+                    st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": cevap})
+                    st.session_state.sohbet_mesajlari.append({"role": "assistant", "content": cevap})
+                except Exception as e:
+                    cevap = "Bir hata olustu. Lutfen tekrar deneyin."
+                    st.session_state.sohbet_mesajlari.append({"role": "assistant", "content": cevap})
+            st.rerun()
+
+        # Manuel soru girisi
+        if kullanici_sorusu := st.chat_input("Bir soru sorun... (ornek: 'Bu is icin cover letter yazar misin?')"):
+            st.session_state.sohbet_mesajlari.append({"role": "user", "content": kullanici_sorusu})
+
+            with st.spinner("AI cevap yaziyor..."):
+                try:
+                    cevap = ai_soru_cevap(
+                        kullanici_sorusu,
+                        st.session_state.cv_text,
+                        st.session_state.jd_text,
+                        st.session_state.mesaj_gecmisi
+                    )
+                    st.session_state.mesaj_gecmisi.append({"role": "user", "content": kullanici_sorusu})
+                    st.session_state.mesaj_gecmisi.append({"role": "assistant", "content": cevap})
+                    st.session_state.sohbet_mesajlari.append({"role": "assistant", "content": cevap})
+                except Exception as e:
+                    cevap = "Bir hata olustu. Lutfen tekrar deneyin."
+                    st.session_state.sohbet_mesajlari.append({"role": "assistant", "content": cevap})
+            st.rerun()
 
         st.divider()
-        st.caption("Analiz kural bazlı keyword eşleştirme ile yapılmıştır. Sonuçlar tavsiye niteliğindedir.")
+        st.caption("AI analizi tavsiye niteligindedir. Groq AI (LLaMA 3.3 70B) kullanilmaktadir.")
 
 
 if __name__ == "__main__":
     main()
-
