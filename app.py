@@ -68,6 +68,95 @@ def temizle(text):
     return text
 
 
+# ── ESANLAMLI KELIME SOZLUGU (Turkce/Ingilizce capraz eslesme) ──
+ESANLAMLILAR = {
+    # Satis / Sales
+    "satis": ["sales", "selling", "musteri temsilcisi", "saha satis", "pazarlama", "magaza"],
+    "sales": ["satis", "musteri temsilcisi", "saha satis", "pazarlama", "selling"],
+    # Yonetim / Management
+    "yonetim": ["management", "liderlik", "supervisor", "team lead", "takim lideri", "koordinasyon"],
+    "management": ["yonetim", "liderlik", "koordinasyon", "takim lideri"],
+    "leadership": ["liderlik", "yonetim", "takim lideri", "koordinasyon"],
+    # Iletisim / Communication
+    "iletisim": ["communication", "diksiyon", "sunum", "presentation", "gorusme"],
+    "communication": ["iletisim", "diksiyon", "sunum", "gorusme"],
+    # Musteri / Customer
+    "musteri": ["customer", "client", "memnuniyet", "satisfaction", "iliskiler"],
+    "customer": ["musteri", "client", "memnuniyet", "iliskiler"],
+    # Ekip / Team
+    "ekip": ["team", "takim", "group", "calisma grubu"],
+    "team": ["ekip", "takim", "grup"],
+    # Deneyim / Experience
+    "deneyim": ["experience", "tecrube", "gecmis", "background"],
+    "experience": ["deneyim", "tecrube", "gecmis"],
+    # Ehliyet / License
+    "ehliyet": ["license", "surucubelgesi", "b sinifi", "arac kullanimi", "driving"],
+    "driving": ["ehliyet", "surucubelgesi", "b sinifi"],
+    # Bilgisayar / Computer
+    "bilgisayar": ["computer", "ms office", "excel", "word", "yazilim", "software"],
+    "computer": ["bilgisayar", "ms office", "yazilim"],
+    # Egitim / Education
+    "egitim": ["education", "training", "lisans", "mezuniyet", "okul"],
+    "education": ["egitim", "lisans", "mezuniyet", "okul"],
+    # Sorumluluk / Responsibility
+    "sorumluluk": ["responsibility", "gorev", "yukumluluk", "accountability"],
+    "responsibility": ["sorumluluk", "gorev", "yukumluluk"],
+    # Hedef / Target
+    "hedef": ["target", "goal", "kpi", "performans", "basari"],
+    "target": ["hedef", "goal", "kpi", "performans"],
+    # Insan iliskileri
+    "insan": ["people", "interpersonal", "iletisim", "iliskiler"],
+    "interpersonal": ["insan iliskileri", "iletisim", "sosyal"],
+    # Askerlik
+    "askerlik": ["military", "tecilli", "muaf", "tamamlandi"],
+    # Ikna
+    "ikna": ["persuasion", "negotiation", "musteri kazanma", "pazarlama"],
+}
+
+# ── SEKTORE OZEL KEYWORD LISTESI ──
+SEKTOR_KEYWORDLERI = {
+    "satis": ["satis hedefi", "musteri portfoyu", "kota", "pipeline", "crm", "teklif", "sozlesme",
+              "b2b", "b2c", "saha ziyareti", "demo", "pitch", "komisyon"],
+    "it": ["python", "java", "sql", "api", "cloud", "aws", "docker", "git", "agile", "scrum",
+           "javascript", "react", "backend", "frontend", "database"],
+    "finans": ["muhasebe", "butce", "mali", "vergi", "bilanço", "excel", "erp", "sap", "fatura"],
+    "insan_kaynaklari": ["ik", "isveren", "isveren markasi", "isseveran", "bordro", "performans",
+                         "oryantasyon", "sgk", "is hukuku"],
+    "pazarlama": ["sosyal medya", "seo", "dijital", "kampanya", "marka", "analitik", "google ads",
+                  "instagram", "linkedin", "icerik"],
+}
+
+
+def sektor_tespit(jd_text):
+    """Is ilanindaki sektoru tespit et."""
+    text = jd_text.lower()
+    skor = {}
+    for sektor, kelimeler in SEKTOR_KEYWORDLERI.items():
+        skor[sektor] = sum(1 for k in kelimeler if k in text)
+    en_iyi = max(skor, key=skor.get)
+    return en_iyi if skor[en_iyi] > 0 else None
+
+
+def esanlamli_genislet(kelimeler_seti):
+    """Verilen kelime setini esanlamlilariyla genislet."""
+    genisletilmis = set(kelimeler_seti)
+    for kelime in list(kelimeler_seti):
+        if kelime in ESANLAMLILAR:
+            genisletilmis.update(ESANLAMLILAR[kelime])
+    return genisletilmis
+
+
+def bigram_cikar(text):
+    """Metinden iki kelimelik ifadeler cikar."""
+    kelimeler = temizle(text).split()
+    bigramlar = []
+    for i in range(len(kelimeler) - 1):
+        bigram = f"{kelimeler[i]} {kelimeler[i+1]}"
+        if len(bigram) > 6:
+            bigramlar.append(bigram)
+    return bigramlar
+
+
 def kelimeleri_cikar(text):
     stopwords = {
         've', 'veya', 'ile', 'bir', 'bu', 'da', 'de', 'icin', 'olan',
@@ -76,7 +165,9 @@ def kelimeleri_cikar(text):
         'that', 'this', 'it', 'we', 'you', 'he', 'she', 'they', 'have',
         'has', 'had', 'will', 'would', 'can', 'could', 'should', 'may',
         'might', 'must', 'shall', 'do', 'does', 'did', 'not', 'but',
-        'if', 'then', 'than', 'so', 'from', 'up', 'about', 'into'
+        'if', 'then', 'than', 'so', 'from', 'up', 'about', 'into',
+        'olan', 'icin', 'veya', 'ile', 'her', 'daha', 'cok', 'gibi',
+        'olan', 'olarak', 'olan', 'olmak', 'sahip', 'aranan'
     }
     kelimeler = temizle(text).split()
     return [k for k in kelimeler if len(k) > 2 and k not in stopwords]
@@ -85,67 +176,159 @@ def kelimeleri_cikar(text):
 def bolum_tespit(cv_text):
     text_lower = cv_text.lower()
     return {
-        "experience": any(k in text_lower for k in ["experience", "deneyim", "work", "employment", "calistim"]),
-        "education": any(k in text_lower for k in ["education", "egitim", "university", "universite", "mezun", "degree", "lisans"]),
-        "skills": any(k in text_lower for k in ["skills", "yetenekler", "beceriler", "competencies", "technical"]),
-        "certifications": any(k in text_lower for k in ["certification", "sertifika", "certificate", "license"])
+        "experience": any(k in text_lower for k in [
+            "experience", "deneyim", "is deneyimi", "work experience",
+            "employment", "calistim", "is gecmisi", "kariyer"
+        ]),
+        "education": any(k in text_lower for k in [
+            "education", "egitim", "university", "universite", "mezun",
+            "degree", "lisans", "lise", "yuksek okul", "mba", "onlisans"
+        ]),
+        "skills": any(k in text_lower for k in [
+            "skills", "yetenekler", "beceriler", "yetkinlikler",
+            "competencies", "technical", "bilgi", "uzmanlik"
+        ]),
+        "certifications": any(k in text_lower for k in [
+            "certification", "sertifika", "certificate", "license",
+            "belge", "kurs", "egitim sertifikasi"
+        ])
     }
 
 
 def format_sorunlari_tespit(cv_text):
     sorunlar = []
     satirlar = cv_text.split('\n')
+
+    # Tablo/sutun kontrolu
     kisa_satirlar = [s for s in satirlar if 0 < len(s.strip()) < 15]
     if len(kisa_satirlar) > 10:
         sorunlar.append("CV'niz tablo veya sutun formati iceriyor. ATS sistemleri tablolari okuyamaz.")
+
+    # Uzun paragraf kontrolu
+    uzun_satirlar = [s for s in satirlar if len(s.strip()) > 300]
+    if uzun_satirlar:
+        sorunlar.append("Cok uzun paragraflar var. Bullet point kullanmaniz onerilir.")
+
+    # Bolum kontrolu
     bolumler = bolum_tespit(cv_text)
     if not bolumler["skills"]:
-        sorunlar.append("'Skills' veya 'Yetenekler' bolumu bulunamadi.")
+        sorunlar.append("'Skills/Beceriler' bolumu bulunamadi. ATS sistemleri bu bolumu arar.")
     if not bolumler["experience"]:
-        sorunlar.append("'Experience' veya 'Deneyim' bolumu bulunamadi.")
+        sorunlar.append("'Experience/Deneyim' bolumu bulunamadi.")
+
+    # Email kontrolu
     if not re.search(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', cv_text):
         sorunlar.append("CV'de email adresi bulunamadi.")
+
+    # Telefon kontrolu
     if not re.search(r'[\+]?[\d\s\-\(\)]{10,}', cv_text):
         sorunlar.append("CV'de telefon numarasi bulunamadi.")
+
+    # Tarih formati kontrolu
+    if not re.search(r'\b(20\d\d|19\d\d)\b', cv_text):
+        sorunlar.append("CV'de yil/tarih bilgisi bulunamadi. Is deneyimlerinize tarih ekleyin.")
+
+    # Ozel karakter kontrolu
+    if any(c in cv_text for c in ['★', '●', '◆', '▸', '✦', '☎', '✉']):
+        sorunlar.append("Ozel karakterler (★, ●, ◆ vb.) ATS sistemlerinde hatali okunabilir.")
+
     return sorunlar
 
 
 def keyword_analizi(cv_text, jd_text):
+    """Gelismis keyword analizi: esanlamlilar + bigram + sektor destegi."""
+
+    # Tekil kelimeler
     cv_kelimeler = set(kelimeleri_cikar(cv_text))
     jd_kelimeler = kelimeleri_cikar(jd_text)
+
+    # Bigramlar
+    cv_bigramlar = set(bigram_cikar(cv_text))
+    jd_bigramlar = set(bigram_cikar(jd_text))
+
+    # JD'deki onemli kelimeler
     jd_sayac = Counter(jd_kelimeler)
     onemli_jd = {k for k, v in jd_sayac.items() if len(k) > 3}
-    eslesen = onemli_jd & cv_kelimeler
-    eksik = onemli_jd - cv_kelimeler
-    genel = {'must', 'will', 'work', 'good', 'well', 'able', 'also', 'more',
-             'than', 'our', 'your', 'their', 'have', 'been', 'they', 'from',
-             'such', 'both', 'each', 'need', 'new', 'high', 'other', 'some',
-             'what', 'when', 'where', 'which', 'while', 'how', 'all', 'any'}
+
+    # CV'yi esanlamlilariyla genislet
+    cv_genisletilmis = esanlamli_genislet(cv_kelimeler)
+
+    # Sektore ozel kontrol
+    sektor = sektor_tespit(jd_text)
+    sektor_eksik = []
+    if sektor and sektor in SEKTOR_KEYWORDLERI:
+        sektor_kelimeleri = SEKTOR_KEYWORDLERI[sektor]
+        sektor_eksik = [k for k in sektor_kelimeleri if k not in cv_text.lower()][:5]
+
+    # Eslesen ve eksik kelimeler
+    eslesen = onemli_jd & cv_genisletilmis
+    eksik = onemli_jd - cv_genisletilmis
+
+    # Bigram eslesmesi
+    bigram_eslesen = onemli_jd & {b.split()[0] for b in cv_bigramlar}
+    eslesen = eslesen | bigram_eslesen
+
+    # Genel kelimeleri filtrele
+    genel = {
+        'must', 'will', 'work', 'good', 'well', 'able', 'also', 'more',
+        'than', 'our', 'your', 'their', 'have', 'been', 'they', 'from',
+        'such', 'both', 'each', 'need', 'new', 'high', 'other', 'some',
+        'what', 'when', 'where', 'which', 'while', 'how', 'all', 'any',
+        'olan', 'icin', 'veya', 'ile', 'olarak', 'sahip', 'aranan', 'olan'
+    }
     eksik = {k for k in eksik if k not in genel and len(k) > 3}
-    return list(eslesen), list(eksik)[:15]
+
+    # Sektor eksiklerini de ekle
+    tum_eksik = list(eksik)[:10] + sektor_eksik[:5]
+
+    return list(eslesen), tum_eksik[:15]
 
 
 def puan_hesapla(cv_text, jd_text, bolumler, eslesen, format_sorunlari):
+    """Gelismis puan hesaplama."""
     puan = 0
     breakdown = {}
+
+    # 1. Keyword eslesmesi (30 puan) - esanlamlilarla genisletilmis
+    cv_genisletilmis = esanlamli_genislet(set(kelimeleri_cikar(cv_text)))
     jd_kelimeler = set(kelimeleri_cikar(jd_text))
-    kw_puan = min(30, int(len(set(eslesen)) / max(len(jd_kelimeler), 1) * 120)) if jd_kelimeler else 15
+    gercek_eslesen = cv_genisletilmis & jd_kelimeler
+    kw_oran = len(gercek_eslesen) / max(len(jd_kelimeler), 1)
+    kw_puan = min(30, int(kw_oran * 100))
     breakdown["keyword_match"] = kw_puan
     puan += kw_puan
+
+    # 2. Bolum yapisi (20 puan)
     bolum_puan = sum(5 for v in bolumler.values() if v)
     breakdown["section_structure"] = bolum_puan
     puan += bolum_puan
-    bullet_sayisi = len(re.findall(r'[\*\-]|\n\s*[-*]', cv_text))
-    bullet_puan = min(20, bullet_sayisi * 2)
+
+    # 3. Bullet kalitesi (20 puan)
+    bullet_sayisi = len(re.findall(r'(?m)^[\s]*[-*•]', cv_text))
+    guclu_fiil = len(re.findall(
+        r'\b(led|managed|developed|created|achieved|improved|implemented|designed|'
+        r'yonettim|gelistirdim|olusturdum|artirdim|sagladim|koordine|tasarladim)\b',
+        cv_text.lower()
+    ))
+    bullet_puan = min(20, bullet_sayisi * 2 + guclu_fiil)
     breakdown["bullet_quality"] = bullet_puan
     puan += bullet_puan
+
+    # 4. Format (15 puan)
     format_puan = max(0, 15 - len(format_sorunlari) * 3)
     breakdown["formatting"] = format_puan
     puan += format_puan
-    sayisal = re.findall(r'\d+\s*(%|yil|ay|kisi|milyon|bin|proje|year|month|people|million)', cv_text.lower())
+
+    # 5. Sayisal basarilar (15 puan)
+    sayisal = re.findall(
+        r'\d+\s*(%|yil|ay|kisi|milyon|bin|proje|musteri|year|month|people|million|k\b|'
+        r'satis|gelir|buyume|artis|azalis)',
+        cv_text.lower()
+    )
     sayisal_puan = min(15, len(sayisal) * 3)
     breakdown["quantified_achievements"] = sayisal_puan
     puan += sayisal_puan
+
     return min(100, puan), breakdown
 
 
