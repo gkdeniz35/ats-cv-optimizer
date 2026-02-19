@@ -531,24 +531,180 @@ def main():
 
     tr = st.session_state.dil == "tr"
 
-    st.title("📄 ATS CV Optimizer")
-    st.caption("AI destekli CV analizi ve kariyer kocu" if tr else "AI-powered CV analysis and career coach")
+    # Global CSS - Profesyonel tema
+    st.markdown("""
+    <style>
+    /* Ana arka plan */
+    .stApp { background-color: #f4f6fb; }
 
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%) !important;
+    }
+    [data-testid="stSidebar"] * { color: #c8d0e7 !important; }
+    [data-testid="stSidebar"] h1,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h3 { color: #ffffff !important; }
+    [data-testid="stSidebar"] .stButton button {
+        background: rgba(255,255,255,0.08) !important;
+        border: 1px solid rgba(255,255,255,0.2) !important;
+        color: #ffffff !important;
+        border-radius: 8px !important;
+        font-size: 0.82rem !important;
+    }
+    [data-testid="stSidebar"] .stButton button:hover {
+        background: rgba(255,255,255,0.15) !important;
+    }
+
+    /* Baslik alani */
+    .main-header {
+        background: linear-gradient(135deg, #1a1a2e, #0f3460);
+        padding: 28px 35px;
+        border-radius: 16px;
+        margin-bottom: 24px;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        box-shadow: 0 8px 32px rgba(15,52,96,0.18);
+    }
+    .main-header h1 {
+        color: #ffffff !important;
+        font-size: 2rem !important;
+        font-weight: 800 !important;
+        margin: 0 !important;
+        letter-spacing: -0.5px;
+    }
+    .main-header p { color: #a8b2d8; font-size: 0.9rem; margin: 4px 0 0 0; }
+
+    /* Kart stili */
+    .section-card {
+        background: #ffffff;
+        border-radius: 14px;
+        padding: 24px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+        border: 1px solid #e8ecf4;
+        margin-bottom: 16px;
+    }
+    .section-card h3 {
+        font-size: 1rem;
+        font-weight: 700;
+        color: #1a1a2e;
+        margin-bottom: 12px;
+    }
+
+    /* Analiz butonu */
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #0f3460, #1a1a2e) !important;
+        color: white !important;
+        border: none !important;
+        border-radius: 10px !important;
+        font-weight: 700 !important;
+        font-size: 1rem !important;
+        padding: 14px !important;
+        box-shadow: 0 4px 15px rgba(15,52,96,0.3) !important;
+        transition: all 0.2s !important;
+    }
+    .stButton > button[kind="primary"]:hover {
+        box-shadow: 0 6px 20px rgba(15,52,96,0.45) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    /* Adim kartlari sidebar */
+    .step-card {
+        background: rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin: 6px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .step-num {
+        background: #0f3460;
+        color: white;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+        flex-shrink: 0;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Ana baslik
+    st.markdown(f"""
+    <div class="main-header">
+        <div style="background:rgba(255,255,255,0.12); border-radius:12px; padding:12px 16px; font-size:1.8rem;">📄</div>
+        <div>
+            <h1>ATS CV Optimizer</h1>
+            <p>{"AI destekli CV analizi ve kariyer kocu" if tr else "AI-powered CV analysis and career coach"}</p>
+        </div>
+        <div style="margin-left:auto; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:20px; padding:5px 14px; font-size:0.75rem; color:#a8b2d8; letter-spacing:1px;">
+            {"🇹🇷 TÜRKÇE" if tr else "🇬🇧 ENGLISH"}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Sidebar
     with st.sidebar:
-        if st.button("🌐 Dil Degistir / Change Language"):
+        st.markdown("""
+        <div style="padding:16px 0 8px 0; text-align:center;">
+            <p style="font-size:1.3rem; font-weight:800; color:#ffffff; margin:0; letter-spacing:-0.5px;">📄 ATS CV</p>
+            <p style="font-size:0.75rem; color:#6b7db3; margin:2px 0 0 0; letter-spacing:1px; text-transform:uppercase;">Optimizer</p>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        steps_tr = [
+            ("CV'nizi yukleyin", "PDF, DOCX veya metin"),
+            ("Is ilanini girin", "Kopyalayip yapistirin"),
+            ("Analiz edin", "Tek tiklama yeterli"),
+            ("Feedback alin", "AI destekli rapor"),
+            ("Bota sorun", "Cover letter, mulakat"),
+        ]
+        steps_en = [
+            ("Upload your CV", "PDF, DOCX or text"),
+            ("Enter job description", "Copy and paste"),
+            ("Analyze", "One click is enough"),
+            ("Get feedback", "AI-powered report"),
+            ("Ask the bot", "Cover letter, interview"),
+        ]
+        steps = steps_tr if tr else steps_en
+
+        st.markdown(f"<p style='color:#a8b2d8; font-size:0.7rem; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px;'>{'NASIL KULLANILIR' if tr else 'HOW IT WORKS'}</p>", unsafe_allow_html=True)
+        for i, (title, desc) in enumerate(steps, 1):
+            st.markdown(f"""
+            <div class="step-card">
+                <div class="step-num">{i}</div>
+                <div>
+                    <p style="margin:0; font-size:0.82rem; font-weight:600; color:#e0e6ff;">{title}</p>
+                    <p style="margin:0; font-size:0.72rem; color:#6b7db3;">{desc}</p>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        badges = [
+            ("✅", "Ucretsiz / Free"),
+            ("🔒", "Veri kaydetmez"),
+            ("🤖", "Groq AI powered"),
+            ("⚡", "Anlik analiz"),
+        ]
+        for icon, text in badges:
+            st.markdown(f"<p style='margin:4px 0; font-size:0.8rem; color:#a8b2d8;'>{icon} {text}</p>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        if st.button("🌐 Dil Degistir / Change Language", use_container_width=True):
             st.session_state.dil = None
             st.session_state.analiz_yapildi = False
             st.rerun()
-        st.markdown("---")
-        st.header("Nasil Calisir?" if tr else "How It Works")
-        if tr:
-            st.markdown("1. CV'nizi yapistirin\n2. Is ilanini yapistirin\n3. Analiz Et butonuna basin\n4. AI feedback alin\n5. AI bota soru sorun")
-        else:
-            st.markdown("1. Paste your CV\n2. Paste the Job Description\n3. Click Analyze\n4. Get AI feedback\n5. Chat with AI assistant")
-        st.markdown("---")
-        st.success("✅ Free / Ucretsiz\n\n✅ No API key\n\n✅ AI powered")
-
-    st.divider()
 
     col_cv, col_jd = st.columns(2)
 
