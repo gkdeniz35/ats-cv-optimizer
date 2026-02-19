@@ -284,48 +284,101 @@ def keyword_analizi(cv_text, jd_text):
     return list(eslesen), tum_eksik[:15]
 
 
+def onem_skoru(kelime, jd_text):
+    """Bir kelimenin JD icinde kac kez gectigi - onem skoru."""
+    return jd_text.lower().count(kelime.lower())
+
+
 def puan_hesapla(cv_text, jd_text, bolumler, eslesen, format_sorunlari):
-    """Gelismis puan hesaplama."""
+    """Gelismis ve agirlikli puan hesaplama - %80 dogruluk hedefi."""
     puan = 0
     breakdown = {}
+    cv_lower = cv_text.lower()
+    jd_lower = jd_text.lower()
 
-    # 1. Keyword eslesmesi (30 puan) - esanlamlilarla genisletilmis
+    # ── 1. KEYWORD ESLESMESI (30 puan) ──
+    # Hem tekil kelime hem bigram, hem esanlamli, hem onem agirlikli
     cv_genisletilmis = esanlamli_genislet(set(kelimeleri_cikar(cv_text)))
     jd_kelimeler = set(kelimeleri_cikar(jd_text))
-    gercek_eslesen = cv_genisletilmis & jd_kelimeler
-    kw_oran = len(gercek_eslesen) / max(len(jd_kelimeler), 1)
-    kw_puan = min(30, int(kw_oran * 100))
+    cv_bigramlar = set(bigram_cikar(cv_text))
+    jd_bigramlar = set(bigram_cikar(jd_text))
+
+    # Agirlikli eslesme: JD'de cok gecen kelimeler daha fazla puan
+    toplam_agirlik = 0
+    eslesen_agirlik = 0
+    for kw in jd_kelimeler:
+        agirlik = min(3, onem_skoru(kw, jd_text))  # max 3x agirlik
+        toplam_agirlik += agirlik
+        if kw in cv_genisletilmis:
+            eslesen_agirlik += agirlik
+        # Bigram kontrolu
+        elif any(kw in bg for bg in cv_bigramlar):
+            eslesen_agirlik += agirlik * 0.7
+
+    # Bigram direk eslesmesi bonus
+    bigram_bonus = len(jd_bigramlar & cv_bigramlar) * 0.5
+
+    kw_oran = (eslesen_agirlik + bigram_bonus) / max(toplam_agirlik, 1)
+    kw_puan = min(30, int(kw_oran * 55))
     breakdown["keyword_match"] = kw_puan
     puan += kw_puan
 
-    # 2. Bolum yapisi (20 puan)
-    bolum_puan = sum(5 for v in bolumler.values() if v)
-    breakdown["section_structure"] = bolum_puan
-    puan += bolum_puan
+    # ── 2. BOLUM YAPISI (20 puan) ──
+    # Her bolum 5 puan, kritik bolumler ekstra
+    bolum_puan = 0
+    for bolum, var in bolumler.items():
+        if var:
+            bolum_puan += 5
+    # Ozet/profil bolumu varsa bonus
+    if any(k in cv_lower for k in ["ozet", "profil", "summary", "objective", "hakkimda", "about me"]):
+        bolum_puan = min(20, bolum_puan + 3)
+    breakdown["section_structure"] = min(20, bolum_puan)
+    puan += breakdown["section_structure"]
 
-    # 3. Bullet kalitesi (20 puan)
-    bullet_sayisi = len(re.findall(r'(?m)^[\s]*[-*•]', cv_text))
-    guclu_fiil = len(re.findall(
-        r'\b(led|managed|developed|created|achieved|improved|implemented|designed|'
-        r'yonettim|gelistirdim|olusturdum|artirdim|sagladim|koordine|tasarladim)\b',
-        cv_text.lower()
-    ))
-    bullet_puan = min(20, bullet_sayisi * 2 + guclu_fiil)
-    breakdown["bullet_quality"] = bullet_puan
-    puan += bullet_puan
+    # ── 3. BULLET + GUCLU FİİL KALİTESİ (20 puan) ──
+    bullet_sayisi = len(re.findall(r"(?m)^[\s]*[-*•]", cv_text))
+    guclu_fiiller = [
+        "led", "managed", "developed", "created", "achieved", "improved",
+        "implemented", "designed", "launched", "built", "drove", "increased",
+        "reduced", "delivered", "coordinated", "negotiated", "trained",
+        "yonettim", "gelistirdim", "olusturdum", "artirdim", "sagladim",
+        "koordine", "tasarladim", "kurdum", "azalttim", "teslim", "egittim",
+        "musteri kazandim", "satis yaptim", "hedef tuttum"
+    ]
+    fiil_sayisi = sum(1 for f in guclu_fiiller if f in cv_lower)
+    bullet_puan = min(12, bullet_sayisi * 1) + min(8, fiil_sayisi * 2)
+    breakdown["bullet_quality"] = min(20, bullet_puan)
+    puan += breakdown["bullet_quality"]
 
-    # 4. Format (15 puan)
-    format_puan = max(0, 15 - len(format_sorunlari) * 3)
-    breakdown["formatting"] = format_puan
-    puan += format_puan
+    # ── 4. FORMAT DOGRULUGU (15 puan) ──
+    format_puan = 15
+    format_puan -= len(format_sorunlari) * 3
+    # Email ve telefon varsa bonus
+    if re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}", cv_text):
+        format_puan = min(15, format_puan + 1)
+    if re.search(r"[\+]?[\d\s\-\(\)]{10,}", cv_text):
+        format_puan = min(15, format_puan + 1)
+    # LinkedIn varsa bonus
+    if "linkedin" in cv_lower:
+        format_puan = min(15, format_puan + 1)
+    # CV uzunlugu kontrolu (200-800 kelime ideal)
+    kelime_sayisi = len(cv_text.split())
+    if 200 <= kelime_sayisi <= 800:
+        format_puan = min(15, format_puan + 2)
+    breakdown["formatting"] = max(0, format_puan)
+    puan += breakdown["formatting"]
 
-    # 5. Sayisal basarilar (15 puan)
-    sayisal = re.findall(
-        r'\d+\s*(%|yil|ay|kisi|milyon|bin|proje|musteri|year|month|people|million|k\b|'
-        r'satis|gelir|buyume|artis|azalis)',
-        cv_text.lower()
+    # ── 5. SAYISAL BASARILAR (15 puan) ──
+    sayisal_pattern = re.findall(
+        r"\d+\s*(%|yil|ay|kisi|milyon|bin|proje|musteri|year|month|people|"
+        r"million|satis|gelir|buyume|artis|azalis|adet|urun|marka|musteri|"
+        r"team|ekip|bolge|sehir|magaza|subeye|hedef)",
+        cv_lower
     )
-    sayisal_puan = min(15, len(sayisal) * 3)
+    # Yuzde isareti tek basina da gecerliyse say
+    yuzde = re.findall(r"\d+\s*%", cv_text)
+    tum_sayisal = len(sayisal_pattern) + len(yuzde)
+    sayisal_puan = min(15, tum_sayisal * 3)
     breakdown["quantified_achievements"] = sayisal_puan
     puan += sayisal_puan
 
@@ -450,6 +503,8 @@ def main():
         st.session_state.sohbet_mesajlari = []
     if "dil" not in st.session_state:
         st.session_state.dil = None
+    if "tema" not in st.session_state:
+        st.session_state.tema = "lacivert"
 
     # Dil secimi ekrani
     if st.session_state.dil is None:
@@ -531,86 +586,68 @@ def main():
 
     tr = st.session_state.dil == "tr"
 
-    # Global CSS - Profesyonel tema
-    st.markdown("""
-    <style>
-    /* Ana arka plan */
-    .stApp { background-color: #f4f6fb; }
-
-    /* Sidebar */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%) !important;
+    # Renk temaları
+    TEMALAR = {
+        "lacivert": {"bg": "#f4f6fb", "sidebar": "linear-gradient(180deg, #1a1a2e 0%, #16213e 100%)", "header": "linear-gradient(135deg, #1a1a2e, #0f3460)", "accent": "#0f3460", "isim": "🌑 Lacivert"},
+        "yesil": {"bg": "#f0faf4", "sidebar": "linear-gradient(180deg, #0d2b1a 0%, #1a4a2e 100%)", "header": "linear-gradient(135deg, #0d2b1a, #1a6b3a)", "accent": "#1a6b3a", "isim": "🌿 Yeşil"},
+        "mor": {"bg": "#f5f0ff", "sidebar": "linear-gradient(180deg, #1a0a2e 0%, #2d1b4e 100%)", "header": "linear-gradient(135deg, #1a0a2e, #4a1a8e)", "accent": "#4a1a8e", "isim": "🔮 Mor"},
+        "kirmizi": {"bg": "#fff5f5", "sidebar": "linear-gradient(180deg, #2b0a0a 0%, #4a1a1a 100%)", "header": "linear-gradient(135deg, #2b0a0a, #8e1a1a)", "accent": "#8e1a1a", "isim": "🔴 Bordo"},
+        "turuncu": {"bg": "#fff8f0", "sidebar": "linear-gradient(180deg, #2b1a0a 0%, #4a2e0d 100%)", "header": "linear-gradient(135deg, #2b1a0a, #c45e0a)", "accent": "#c45e0a", "isim": "🟠 Turuncu"},
+        "gri": {"bg": "#f5f5f7", "sidebar": "linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%)", "header": "linear-gradient(135deg, #1a1a1a, #3d3d3d)", "accent": "#3d3d3d", "isim": "⚫ Koyu Gri"},
     }
-    [data-testid="stSidebar"] * { color: #c8d0e7 !important; }
+    tema = TEMALAR[st.session_state.tema]
+
+    # Global CSS - inject via helper to avoid f-string brace conflicts
+    bg = tema["bg"]
+    sidebar_bg = tema["sidebar"]
+    accent = tema["accent"]
+    header_grad = tema["header"]
+
+    css = f"""
+    <style>
+    .stApp {{ background-color: {bg}; }}
+    [data-testid="stSidebar"] {{ background: {sidebar_bg} !important; }}
+    [data-testid="stSidebar"] * {{ color: #c8d0e7 !important; }}
     [data-testid="stSidebar"] h1,
     [data-testid="stSidebar"] h2,
-    [data-testid="stSidebar"] h3 { color: #ffffff !important; }
-    [data-testid="stSidebar"] .stButton button {
+    [data-testid="stSidebar"] h3 {{ color: #ffffff !important; }}
+    [data-testid="stSidebar"] .stButton button {{
         background: rgba(255,255,255,0.08) !important;
         border: 1px solid rgba(255,255,255,0.2) !important;
         color: #ffffff !important;
         border-radius: 8px !important;
         font-size: 0.82rem !important;
-    }
-    [data-testid="stSidebar"] .stButton button:hover {
+    }}
+    [data-testid="stSidebar"] .stButton button:hover {{
         background: rgba(255,255,255,0.15) !important;
-    }
-
-    /* Baslik alani */
-    .main-header {
-        background: linear-gradient(135deg, #1a1a2e, #0f3460);
+    }}
+    .main-header {{
+        background: {header_grad};
         padding: 28px 35px;
         border-radius: 16px;
         margin-bottom: 24px;
         display: flex;
         align-items: center;
         gap: 16px;
-        box-shadow: 0 8px 32px rgba(15,52,96,0.18);
-    }
-    .main-header h1 {
-        color: #ffffff !important;
-        font-size: 2rem !important;
-        font-weight: 800 !important;
-        margin: 0 !important;
-        letter-spacing: -0.5px;
-    }
-    .main-header p { color: #a8b2d8; font-size: 0.9rem; margin: 4px 0 0 0; }
-
-    /* Kart stili */
-    .section-card {
-        background: #ffffff;
-        border-radius: 14px;
-        padding: 24px;
-        box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-        border: 1px solid #e8ecf4;
-        margin-bottom: 16px;
-    }
-    .section-card h3 {
-        font-size: 1rem;
-        font-weight: 700;
-        color: #1a1a2e;
-        margin-bottom: 12px;
-    }
-
-    /* Analiz butonu */
-    .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, #0f3460, #1a1a2e) !important;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }}
+    .main-header h1 {{ color: #ffffff !important; font-size: 2rem !important; font-weight: 800 !important; margin: 0 !important; letter-spacing: -0.5px; }}
+    .main-header p {{ color: #a8b2d8; font-size: 0.9rem; margin: 4px 0 0 0; }}
+    .stButton > button[kind="primary"] {{
+        background: {header_grad} !important;
         color: white !important;
         border: none !important;
         border-radius: 10px !important;
         font-weight: 700 !important;
         font-size: 1rem !important;
         padding: 14px !important;
-        box-shadow: 0 4px 15px rgba(15,52,96,0.3) !important;
         transition: all 0.2s !important;
-    }
-    .stButton > button[kind="primary"]:hover {
-        box-shadow: 0 6px 20px rgba(15,52,96,0.45) !important;
+    }}
+    .stButton > button[kind="primary"]:hover {{
+        opacity: 0.9 !important;
         transform: translateY(-1px) !important;
-    }
-
-    /* Adim kartlari sidebar */
-    .step-card {
+    }}
+    .step-card {{
         background: rgba(255,255,255,0.05);
         border: 1px solid rgba(255,255,255,0.1);
         border-radius: 10px;
@@ -619,9 +656,9 @@ def main():
         display: flex;
         align-items: center;
         gap: 10px;
-    }
-    .step-num {
-        background: #0f3460;
+    }}
+    .step-num {{
+        background: {accent};
         color: white;
         width: 24px;
         height: 24px;
@@ -632,11 +669,11 @@ def main():
         font-size: 0.75rem;
         font-weight: 700;
         flex-shrink: 0;
-    }
+    }}
     </style>
-    """, unsafe_allow_html=True)
+    """
+    st.markdown(css, unsafe_allow_html=True)
 
-    # Ana baslik
     st.markdown(f"""
     <div class="main-header">
         <div style="background:rgba(255,255,255,0.12); border-radius:12px; padding:12px 16px; font-size:1.8rem;">📄</div>
@@ -699,6 +736,15 @@ def main():
         ]
         for icon, text in badges:
             st.markdown(f"<p style='margin:4px 0; font-size:0.8rem; color:#a8b2d8;'>{icon} {text}</p>", unsafe_allow_html=True)
+
+        st.markdown("---")
+        st.markdown(f"<p style='color:#a8b2d8; font-size:0.7rem; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:8px;'>{'TEMA SEÇ' if tr else 'THEME'}</p>", unsafe_allow_html=True)
+        tema_secenekleri = {k: v["isim"] for k, v in TEMALAR.items()}
+        for tema_key, tema_isim in tema_secenekleri.items():
+            secili = "✦ " if tema_key == st.session_state.tema else ""
+            if st.button(f"{secili}{tema_isim}", key=f"tema_{tema_key}", use_container_width=True):
+                st.session_state.tema = tema_key
+                st.rerun()
 
         st.markdown("---")
         if st.button("🌐 Dil Degistir / Change Language", use_container_width=True):
