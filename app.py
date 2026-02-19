@@ -473,9 +473,10 @@ def main():
         .feature-card .fdesc { font-size: 0.85rem; color: #666; }
         </style>
         <div class="landing-hero">
-            <h1>📄 ATS CV Optimizer</h1>
-            <p class="subtitle">AI destekli CV analizi ve kariyer kocu</p>
-            <p class="subtitle">AI-powered CV analysis and career coach</p>
+            <div style="display:inline-block; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.15); border-radius:30px; padding:6px 18px; font-size:0.8rem; color:#a8b2d8; letter-spacing:2px; text-transform:uppercase; margin-bottom:20px;">AI-Powered Career Tool</div>
+            <h1 style="font-size:3.8rem; font-weight:900; color:#ffffff; margin:10px 0; letter-spacing:-2px; line-height:1.1;">ATS CV Optimizer</h1>
+            <p style="font-size:1.1rem; color:#a8b2d8; max-width:500px; margin:12px auto; line-height:1.6;">CV'nizi yapay zeka ile analiz edin, iş ilanına özel optimize edin ve işe alım sürecinde öne çıkın.</p>
+            <p style="font-size:0.95rem; color:#6b7db3; max-width:500px; margin:0 auto 25px auto; line-height:1.6;">Analyze your CV with AI, optimize it for job descriptions, and stand out in the hiring process.</p>
             <div class="badge-row">
                 <span class="badge">✅ Ucretsiz / Free</span>
                 <span class="badge">🤖 AI Destekli / Powered</span>
