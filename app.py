@@ -501,19 +501,32 @@ def main():
                     <div class="fdesc">{desc}</div>
                 </div>""", unsafe_allow_html=True)
 
-        st.markdown("<br><p style='text-align:center;color:#666;font-size:1rem;'>🌐 Dil Secin / Choose Your Language</p>", unsafe_allow_html=True)
+        st.markdown("""
+        <div style='text-align:center; margin: 30px 0 15px 0;'>
+            <p style='color:#555; font-size:1rem; font-weight:600; letter-spacing:1px; text-transform:uppercase;'>🌐 Dil Seçin / Choose Your Language</p>
+        </div>
+        """, unsafe_allow_html=True)
+
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             lang_col1, lang_col2 = st.columns(2)
             with lang_col1:
-                if st.button("🇹🇷  Turkce ile Devam Et", use_container_width=True, type="primary"):
+                if st.button("🇹🇷  Türkçe ile Devam Et", use_container_width=True, type="primary"):
                     st.session_state.dil = "tr"
                     st.rerun()
             with lang_col2:
                 if st.button("🇬🇧  Continue in English", use_container_width=True, type="primary"):
                     st.session_state.dil = "en"
                     st.rerun()
-        st.markdown("<br><p style='text-align:center;color:#aaa;font-size:0.8rem;'>Verileriniz kaydedilmez • Your data is not stored • Powered by Groq AI</p>", unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style='text-align:center; margin-top:25px; padding:15px; background:#f8f9ff; border-radius:12px;'>
+            <p style='color:#888; font-size:0.78rem; margin:0; line-height:1.8;'>
+            🔒 Verileriniz kaydedilmez &nbsp;•&nbsp; Your data is not stored<br>
+            ⚡ Powered by Groq AI (LLaMA 3.3 70B) &nbsp;•&nbsp; 100% Free
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
         return
 
     tr = st.session_state.dil == "tr"
