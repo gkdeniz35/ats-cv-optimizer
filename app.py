@@ -454,25 +454,65 @@ def main():
     # Dil secimi ekrani
     if st.session_state.dil is None:
         st.markdown("""
-        <div style='text-align:center; padding: 80px 20px;'>
-            <h1 style='font-size:3rem;'>📄 ATS CV Optimizer</h1>
-            <p style='font-size:1.2rem; color:#666;'>AI destekli CV analizi ve kariyer kocu</p>
-            <p style='font-size:1.2rem; color:#666;'>AI-powered CV analysis and career coach</p>
-            <br>
+        <style>
+        .landing-hero {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            padding: 60px 40px;
+            border-radius: 20px;
+            text-align: center;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        .landing-hero h1 { font-size: 3.5rem; font-weight: 800; color: #ffffff; margin-bottom: 10px; }
+        .landing-hero .subtitle { font-size: 1.2rem; color: #a8b2d8; margin-bottom: 5px; }
+        .badge-row { display: flex; justify-content: center; gap: 15px; flex-wrap: wrap; margin: 25px 0; }
+        .badge { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); color: #e0e0e0; padding: 6px 16px; border-radius: 20px; font-size: 0.85rem; }
+        .feature-card { background: #f8f9ff; border: 1px solid #e8ecff; border-radius: 12px; padding: 20px; text-align: center; }
+        .feature-card .ficon { font-size: 2rem; margin-bottom: 8px; }
+        .feature-card .ftitle { font-weight: 700; color: #1a1a2e; margin-bottom: 5px; }
+        .feature-card .fdesc { font-size: 0.85rem; color: #666; }
+        </style>
+        <div class="landing-hero">
+            <h1>📄 ATS CV Optimizer</h1>
+            <p class="subtitle">AI destekli CV analizi ve kariyer kocu</p>
+            <p class="subtitle">AI-powered CV analysis and career coach</p>
+            <div class="badge-row">
+                <span class="badge">✅ Ucretsiz / Free</span>
+                <span class="badge">🤖 AI Destekli / Powered</span>
+                <span class="badge">🇹🇷 Turkce / 🇬🇧 English</span>
+                <span class="badge">⚡ Anlik Analiz / Instant</span>
+            </div>
         </div>
         """, unsafe_allow_html=True)
+
+        f1, f2, f3, f4 = st.columns(4)
+        cards = [
+            ("📊", "ATS Skoru", "CV'nizi 0-100 arasi puanlayin / Score your CV"),
+            ("🔑", "Keyword Analizi", "Eksik kelimeleri tespit edin / Find missing keywords"),
+            ("🤖", "AI Feedback", "Kisisel kariyer kocu / Personal career coach"),
+            ("💬", "AI Asistan", "Cover letter, mulakat / Interview prep"),
+        ]
+        for col, (icon, title, desc) in zip([f1, f2, f3, f4], cards):
+            with col:
+                st.markdown(f"""<div class="feature-card">
+                    <div class="ficon">{icon}</div>
+                    <div class="ftitle">{title}</div>
+                    <div class="fdesc">{desc}</div>
+                </div>""", unsafe_allow_html=True)
+
+        st.markdown("<br><p style='text-align:center;color:#666;font-size:1rem;'>🌐 Dil Secin / Choose Your Language</p>", unsafe_allow_html=True)
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            st.markdown("### 🌐 Dil Secin / Choose Language")
             lang_col1, lang_col2 = st.columns(2)
             with lang_col1:
-                if st.button("🇹🇷  Turkce", use_container_width=True, type="primary"):
+                if st.button("🇹🇷  Turkce ile Devam Et", use_container_width=True, type="primary"):
                     st.session_state.dil = "tr"
                     st.rerun()
             with lang_col2:
-                if st.button("🇬🇧  English", use_container_width=True, type="primary"):
+                if st.button("🇬🇧  Continue in English", use_container_width=True, type="primary"):
                     st.session_state.dil = "en"
                     st.rerun()
+        st.markdown("<br><p style='text-align:center;color:#aaa;font-size:0.8rem;'>Verileriniz kaydedilmez • Your data is not stored • Powered by Groq AI</p>", unsafe_allow_html=True)
         return
 
     tr = st.session_state.dil == "tr"
